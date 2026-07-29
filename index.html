@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Doctor Utilization</title>
+<style>
+:root {
+  --surface-1:#fcfcfb; --page:#f9f9f7;
+  --ink-1:#0b0b0b; --ink-2:#52514e; --ink-3:#898781;
+  --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,0.10);
+  --sc:#2a78d6; --fu:#1baf7a;
+  --sc-soft:#cde2fb; --fu-soft:#d3f2e5;
+  --good:#006300; --bad:#d03b3b;
+  --track:#f0efec;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-1:#1a1a19; --page:#0d0d0d;
+    --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
+    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,0.10);
+    --sc:#3987e5; --fu:#199e70;
+    --sc-soft:#104281; --fu-soft:#0e4d38;
+    --good:#0ca30c; --bad:#e66767;
+    --track:#2c2c2a;
+  }
+}
+* { box-sizing:border-box; }
+body {
+  margin:0; background:var(--page); color:var(--ink-1);
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif; font-size:14px;
+}
+.wrap { max-width:1280px; margin:0 auto; padding:20px 24px 60px; }
+header h1 { font-size:20px; margin:0 0 2px; }
+header .sub { color:var(--ink-3); font-size:12px; }
+.defn { color:var(--ink-2); font-size:12px; margin-top:6px; max-width:900px; line-height:1.5; }
+
+.tabs { display:flex; gap:4px; margin-top:16px; border-bottom:1px solid var(--axis); }
+.tabs button {
+  font:inherit; font-size:14px; font-weight:600; border:0; background:transparent; color:var(--ink-3);
+  padding:8px 14px; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px;
+}
+.tabs button.on { color:var(--ink-1); border-bottom-color:var(--sc); }
+.prog {
+  display:inline-block; font-size:10px; font-weight:600; letter-spacing:.04em;
+  border:1px solid var(--border); border-radius:5px; padding:1px 5px; color:var(--ink-2);
+  background:var(--track); vertical-align:1px;
+}
+.filters {
+  display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+  margin:18px 0 14px; padding:12px 14px;
+  background:var(--surface-1); border:1px solid var(--border); border-radius:10px;
+}
+.filters label { font-size:12px; color:var(--ink-2); display:flex; align-items:center; gap:6px; }
+select, input[type=search] {
+  font:inherit; color:var(--ink-1); background:var(--page);
+  border:1px solid var(--border); border-radius:7px; padding:6px 8px; min-width:150px;
+}
+.pills { display:flex; gap:4px; margin-left:auto; background:var(--track); padding:3px; border-radius:8px; }
+.pills button {
+  font:inherit; font-size:12px; border:0; background:transparent; color:var(--ink-2);
+  padding:5px 10px; border-radius:6px; cursor:pointer;
+}
+.pills button.on { background:var(--surface-1); color:var(--ink-1); font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.12); }
+
+.kpis { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:10px; margin-bottom:16px; }
+@media (max-width:980px){ .kpis { grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); } }
+.kpi { background:var(--surface-1); border:1px solid var(--border); border-radius:10px; padding:12px 12px; }
+.kpi .lbl { font-size:11px; color:var(--ink-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.kpi .val { font-size:22px; font-weight:650; margin-top:2px; }
+.kpi .delta { font-size:12px; margin-top:2px; color:var(--ink-3); }
+.kpi .delta .up { color:var(--good); font-weight:600; }
+.kpi .delta .dn { color:var(--bad); font-weight:600; }
+
+.card { background:var(--surface-1); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:16px; }
+.card h2 { font-size:14px; margin:0 0 2px; }
+.card .note { font-size:12px; color:var(--ink-3); margin-bottom:10px; }
+.legend { display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--ink-2); margin-bottom:6px; }
+.legend .key { display:inline-flex; align-items:center; gap:6px; }
+.legend svg { flex:none; }
+
+#chartbox { position:relative; }
+#tooltip {
+  position:absolute; pointer-events:none; display:none; z-index:5;
+  background:var(--surface-1); border:1px solid var(--border); border-radius:8px;
+  padding:8px 10px; font-size:12px; box-shadow:0 4px 14px rgba(0,0,0,.18); min-width:150px;
+}
+#tooltip .t { font-weight:600; margin-bottom:4px; }
+#tooltip .r { display:flex; justify-content:space-between; gap:14px; color:var(--ink-2); }
+#tooltip .r b { color:var(--ink-1); font-weight:600; }
+
+table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+th, td { padding:7px 8px; text-align:right; white-space:nowrap; }
+th:first-child, td:first-child { text-align:left; }
+th {
+  font-size:11px; color:var(--ink-3); font-weight:600; text-transform:uppercase; letter-spacing:.03em;
+  border-bottom:1px solid var(--axis); cursor:pointer; user-select:none; position:sticky; top:0; background:var(--surface-1);
+}
+th .arr { font-size:9px; }
+tbody tr { border-bottom:1px solid var(--grid); }
+tbody tr.doc:hover { background:var(--track); cursor:pointer; }
+td.doctor { font-weight:600; max-width:220px; overflow:hidden; text-overflow:ellipsis; }
+td .clin { color:var(--ink-3); font-weight:400; font-size:11px; }
+.pctcell { display:inline-flex; align-items:center; gap:8px; justify-content:flex-end; }
+.bar { width:58px; height:6px; background:var(--track); border-radius:3px; overflow:hidden; }
+.bar i { display:block; height:100%; border-radius:3px; }
+.muted { color:var(--ink-3); }
+tr.detail td { padding:0; }
+tr.detail .inner { padding:8px 8px 14px 26px; }
+tr.detail table { font-size:12px; }
+tr.detail th { position:static; font-size:10px; }
+.empty { text-align:center; color:var(--ink-3); padding:30px 0; }
+.count { font-size:12px; color:var(--ink-3); margin-bottom:6px; }
+footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Doctor Utilization</h1>
+    <div class="sub" id="updated"></div>
+    <div class="defn">
+      <b>Gross utilization</b> = share of a doctor's net bookable slot time consumed by a patient who showed up or no-showed.
+      <b>Net utilization</b> = share consumed by completed consults only. Denominator is realized roster slot time after
+      shrinkage (booked + still-bookable), from roster_slots. SC = Screening Calls · FU = repeat types (Follow Up / Report Reading / Patient Queries).
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button id="tabBtnDoc" class="on">Doctor Utilization</button>
+    <button id="tabBtnTher">Therapist Utilization</button>
+  </div>
+
+  <div id="tab-doctors">
+  <div class="filters">
+    <label>City
+      <select id="fCity"><option value="">All cities</option></select>
+    </label>
+    <label>Clinic
+      <select id="fClinic"><option value="">All clinics</option></select>
+    </label>
+    <div class="pills" id="periodPills"></div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card">
+    <h2>Utilization trend — weekly</h2>
+    <div class="note" id="chartScope"></div>
+    <div class="legend">
+      <span class="key"><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--sc)" stroke-width="2.5"/></svg>SC gross</span>
+      <span class="key"><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--sc)" stroke-width="2.5" stroke-dasharray="4 3"/></svg>SC net</span>
+      <span class="key"><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--fu)" stroke-width="2.5"/></svg>FU gross</span>
+      <span class="key"><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--fu)" stroke-width="2.5" stroke-dasharray="4 3"/></svg>FU net</span>
+    </div>
+    <div id="chartbox">
+      <svg id="chart" width="100%" height="240"></svg>
+      <div id="tooltip"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Doctors</h2>
+    <div class="note" id="tableScope"></div>
+    <div class="count" id="docCount"></div>
+    <div style="overflow-x:auto">
+      <table id="docTable">
+        <thead><tr id="headRow"></tr></thead>
+        <tbody id="docBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  </div><!-- /tab-doctors -->
+
+  <div id="tab-therapists" style="display:none">
+    <div class="filters">
+      <label>Location
+        <select id="tLoc">
+          <option value="">All</option>
+          <option value="Offline">Offline</option>
+          <option value="Online">Online</option>
+        </select>
+      </label>
+      <label>Program
+        <select id="tProg">
+          <option value="">All programs</option>
+          <option value="SH">SH — Sexual health</option>
+          <option value="MH">MH — Mental health</option>
+        </select>
+      </label>
+      <div class="pills" id="tPeriodPills"></div>
+    </div>
+
+    <div class="kpis" id="tKpis"></div>
+
+    <div class="card">
+      <h2>Therapy utilization trend — weekly</h2>
+      <div class="note" id="tChartScope"></div>
+      <div class="legend" id="tLegend"></div>
+      <div id="tChartbox" style="position:relative">
+        <svg id="tChart" width="100%" height="240"></svg>
+        <div id="tTooltip" style="position:absolute;pointer-events:none;display:none;z-index:5;background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.18);min-width:150px"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Therapists</h2>
+      <div class="note">Click a row for the therapist’s week-by-week detail. Program = SH/MH from the program tag on their therapy bookings. Bars scale 0–100%.</div>
+      <div class="count" id="tCount"></div>
+      <div style="overflow-x:auto">
+        <table id="tTable">
+          <thead><tr id="tHeadRow"></tr></thead>
+          <tbody id="tBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div><!-- /tab-therapists -->
+
+  <footer>
+    Bookings cancelled or rescheduled before the slot start are not counted as utilized. Dual online+offline windows are counted
+    once, under Offline. Utilization of ~35% gross / ~23% net on SC is the verified network-wide level — cells are shaded relative
+    to the network median, not an absolute target. Therapist tab: TH (Therapy) slots only; a therapist's program (SH/MH) is derived
+    from the program tag on their bookings, since capacity carries no program. Data: allo_prod · roster_slots (corrected dedup query).
+    Refresh: <code>python3 fetch_data.py</code> and <code>python3 fetch_therapist_data.py</code>.
+  </footer>
+</div>
+
+<script src="data.js"></script>
+<script src="data_therapist.js"></script>
+<script>
+(function(){
+  const D = window.UTIL_DATA;
+  if (!D || !D.rows || !D.rows.length) {
+    document.getElementById('docBody').innerHTML = '<tr><td colspan="12" class="empty">No data — run fetch_data.py first.</td></tr>';
+    return;
+  }
+  document.getElementById('updated').textContent = 'Data through yesterday · refreshed ' + D.updated;
+
+  const C = {}; D.columns.forEach((c,i)=>C[c]=i);
+  const rows = D.rows;
+
+  // ---------- date helpers ----------
+  const parse = s => new Date(s + 'T00:00:00');
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  function monday(s){ const d = parse(s); const dow = (d.getDay()+6)%7; d.setDate(d.getDate()-dow); return iso(d); }
+  function addDays(s,n){ const d = parse(s); d.setDate(d.getDate()+n); return iso(d); }
+  const fmtD = s => { const d = parse(s); return d.toLocaleDateString('en-IN',{day:'numeric',month:'short'}); };
+
+  const allDates = [...new Set(rows.map(r=>r[C.dt]))].sort();
+  const maxDt = allDates[allDates.length-1];
+  const curMon = monday(maxDt);
+
+  // weeks: array of {key: monday, start, end, label, partial}
+  const weekKeys = [...new Set(allDates.map(monday))].sort();
+  const weeks = weekKeys.map(k => ({
+    key:k, start:k, end:addDays(k,6),
+    partial: k === curMon && maxDt < addDays(k,6),
+    label: fmtD(k) + '–' + fmtD(addDays(k,6))
+  }));
+  const fullWeeks = weeks.filter(w=>!w.partial);
+  const lastFull = fullWeeks[fullWeeks.length-1];
+
+  // periods for KPI/table scope
+  function monthRange(offset){ // 0 = this month
+    const d = parse(maxDt); d.setDate(1); d.setMonth(d.getMonth()+offset);
+    const s = iso(d); d.setMonth(d.getMonth()+1); d.setDate(0);
+    return [s, iso(d)];
+  }
+  const periods = [];
+  if (lastFull) periods.push({id:'lastwk', name:'Last week', start:lastFull.start, end:lastFull.end,
+                              prev:[addDays(lastFull.start,-7), addDays(lastFull.end,-7)]});
+  const wk = weeks[weeks.length-1];
+  periods.push({id:'thiswk', name:'This week', start:wk.start, end:wk.end,
+                prev:[addDays(wk.start,-7), addDays(wk.end,-7)], note: wk.partial ? 'partial week' : null});
+  if (fullWeeks.length >= 4) {
+    const s = fullWeeks[fullWeeks.length-4].start, e = lastFull.end;
+    periods.push({id:'l4w', name:'Last 4 weeks', start:s, end:e, prev:[addDays(s,-28), addDays(e,-28)]});
+  }
+  const [tmS] = monthRange(0);
+  periods.push({id:'thismo', name:'This month', start:tmS, end:maxDt, prev:monthRange(-1)});
+  const [lmS,lmE] = monthRange(-1);
+  periods.push({id:'lastmo', name:'Last month', start:lmS, end:lmE, prev:monthRange(-2)});
+  let period = periods[0];
+
+  // ---------- filters ----------
+  const selCity = document.getElementById('fCity');
+  const selClinic = document.getElementById('fClinic');
+  const cities = [...new Set(rows.map(r=>r[C.city]).filter(Boolean))].sort();
+  cities.forEach(c => selCity.add(new Option(c,c)));
+  function refreshClinics(){
+    const city = selCity.value, cur = selClinic.value;
+    const clinics = [...new Set(rows.filter(r=>!city || r[C.city]===city).map(r=>r[C.locality]).filter(Boolean))].sort();
+    selClinic.innerHTML = '<option value="">All clinics</option>';
+    clinics.forEach(c => selClinic.add(new Option(c,c)));
+    if (clinics.includes(cur)) selClinic.value = cur;
+  }
+  refreshClinics();
+
+  function filtered(){
+    const city = selCity.value, clin = selClinic.value;
+    return rows.filter(r =>
+      (!city || r[C.city]===city) &&
+      (!clin || r[C.locality]===clin));
+  }
+
+  // ---------- aggregation ----------
+  function blank(){ return {sc_min:0, sc_slots:0, scg:0, scn:0, fu_min:0, fu_slots:0, fug:0, fun:0,
+                            scg_slots:0, scn_slots:0, fug_slots:0, fun_slots:0, days:new Set()}; }
+  function acc(a,r){
+    a.sc_min += r[C.sc_min]||0; a.sc_slots += r[C.sc_slots]||0;
+    a.scg += (r[C.sc_off_gross_min]||0)+(r[C.sc_on_gross_min]||0);
+    a.scn += (r[C.sc_off_net_min]||0)+(r[C.sc_on_net_min]||0);
+    a.scg_slots += (r[C.sc_off_gross_slots]||0)+(r[C.sc_on_gross_slots]||0);
+    a.scn_slots += (r[C.sc_off_net_slots]||0)+(r[C.sc_on_net_slots]||0);
+    a.fu_min += r[C.fu_min]||0; a.fu_slots += r[C.fu_slots]||0;
+    a.fug += r[C.fu_gross_min]||0; a.fun += r[C.fu_net_min]||0;
+    a.fug_slots += r[C.fu_gross_slots]||0; a.fun_slots += r[C.fu_net_slots]||0;
+    if ((r[C.sc_min]||0) + (r[C.fu_min]||0) > 0) a.days.add(r[C.dt]);
+  }
+  function inRange(r,s,e){ const d=r[C.dt]; return d>=s && d<=e; }
+  function aggregate(rs){ const a=blank(); rs.forEach(r=>acc(a,r)); return a; }
+  const pct = (n,d) => d>0 ? n/d : null;
+  const fmtPct = v => v==null ? '–' : (v*100).toFixed(0)+'%';
+  const fmtPct1 = v => v==null ? '–' : (v*100).toFixed(1)+'%';
+  const fmtHrs = m => m>=5940 ? (m/60).toFixed(0)+'h' : (m/60).toFixed(1)+'h';
+
+  // ---------- KPI strip ----------
+  function deltaHtml(cur, prev, isPct, absFmt){
+    if (cur==null || prev==null) return '<span class="muted">no prior data</span>';
+    const d = isPct ? (cur-prev)*100 : (cur-prev);
+    const cls = d >= 0 ? 'up' : 'dn';
+    const arrow = d >= 0 ? '▲' : '▼';
+    const val = isPct ? Math.abs(d).toFixed(1)+' pp' : (absFmt ? absFmt(Math.abs(d)) : Math.abs(d).toFixed(0));
+    return `<span class="${cls}">${arrow} ${val}</span> vs prior`;
+  }
+  function renderKpis(rs){
+    const cur = aggregate(rs.filter(r=>inRange(r,period.start,period.end)));
+    const prv = aggregate(rs.filter(r=>inRange(r,period.prev[0],period.prev[1])));
+    const docs = new Set(rs.filter(r=>inRange(r,period.start,period.end) && ((r[C.sc_min]||0)+(r[C.fu_min]||0))>0).map(r=>r[C.doctor])).size;
+    const prevDocs = new Set(rs.filter(r=>inRange(r,period.prev[0],period.prev[1]) && ((r[C.sc_min]||0)+(r[C.fu_min]||0))>0).map(r=>r[C.doctor])).size;
+    const items = [
+      {lbl:'SC gross util', v:pct(cur.scg,cur.sc_min), p:pct(prv.scg,prv.sc_min), f:fmtPct1, isPct:true},
+      {lbl:'SC net util', v:pct(cur.scn,cur.sc_min), p:pct(prv.scn,prv.sc_min), f:fmtPct1, isPct:true},
+      {lbl:'FU gross util', v:pct(cur.fug,cur.fu_min), p:pct(prv.fug,prv.fu_min), f:fmtPct1, isPct:true},
+      {lbl:'FU net util', v:pct(cur.fun,cur.fu_min), p:pct(prv.fun,prv.fu_min), f:fmtPct1, isPct:true},
+      {lbl:'SC time offered', v:cur.sc_min, p:prv.sc_min, f:fmtHrs, isPct:false, dFmt:fmtHrs},
+      {lbl:'FU time offered', v:cur.fu_min, p:prv.fu_min, f:fmtHrs, isPct:false, dFmt:fmtHrs},
+      {lbl:'Doctors active', v:docs, p:prevDocs, f:x=>String(x), isPct:false},
+    ];
+    document.getElementById('kpis').innerHTML = items.map(it=>`
+      <div class="kpi">
+        <div class="lbl">${it.lbl}</div>
+        <div class="val">${it.v==null?'–':it.f(it.v)}</div>
+        <div class="delta">${deltaHtml(it.v,it.p,it.isPct,it.dFmt)}</div>
+      </div>`).join('');
+  }
+
+  // ---------- trend chart ----------
+  const svg = document.getElementById('chart');
+  const tip = document.getElementById('tooltip');
+  let chartPts = [];
+  function renderChart(rs){
+    const data = weeks.map(w=>{
+      const a = aggregate(rs.filter(r=>inRange(r,w.start,w.end)));
+      return {w, scg:pct(a.scg,a.sc_min), scn:pct(a.scn,a.sc_min), fug:pct(a.fug,a.fu_min), fun:pct(a.fun,a.fu_min)};
+    }).filter(d=>d.scg!=null || d.fug!=null);
+    const W = svg.clientWidth || 1000, H = 240, mL=44, mR=70, mT=12, mB=28;
+    svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.innerHTML='';
+    if (!data.length) return;
+    const maxV = Math.min(1, Math.max(0.5, ...data.flatMap(d=>[d.scg,d.scn,d.fug,d.fun].filter(v=>v!=null)) ) * 1.15 );
+    const x = i => mL + (data.length===1 ? (W-mL-mR)/2 : i*(W-mL-mR)/(data.length-1));
+    const y = v => mT + (H-mT-mB)*(1 - v/maxV);
+    let g = '';
+    // gridlines + y labels
+    const step = maxV > 0.6 ? 0.2 : 0.1;
+    for (let v=0; v<=maxV+1e-9; v+=step){
+      g += `<line x1="${mL}" y1="${y(v)}" x2="${W-mR}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>`;
+      g += `<text x="${mL-8}" y="${y(v)+4}" text-anchor="end" font-size="11" fill="var(--ink-3)">${Math.round(v*100)}%</text>`;
+    }
+    // x labels
+    data.forEach((d,i)=>{
+      g += `<text x="${x(i)}" y="${H-8}" text-anchor="middle" font-size="11" fill="var(--ink-3)">${fmtD(d.w.start)}${d.w.partial?'*':''}</text>`;
+    });
+    const series = [
+      {k:'scg', color:'var(--sc)', dash:'', name:'SC gross'},
+      {k:'scn', color:'var(--sc)', dash:'4 3', name:'SC net'},
+      {k:'fug', color:'var(--fu)', dash:'', name:'FU gross'},
+      {k:'fun', color:'var(--fu)', dash:'4 3', name:'FU net'},
+    ];
+    series.forEach(s=>{
+      const pts = data.map((d,i)=>d[s.k]==null?null:`${x(i)},${y(d[s.k])}`);
+      let path = '', open = false;
+      pts.forEach(p=>{ if(p==null){open=false;return;} path += (open?' L':' M')+p; open=true; });
+      g += `<path d="${path}" fill="none" stroke="${s.color}" stroke-width="2" stroke-dasharray="${s.dash}"/>`;
+      const li = data.length-1, lv = data[li][s.k];
+      if (lv!=null) g += `<text x="${x(li)+7}" y="${y(lv)+4}" font-size="11" font-weight="600" fill="${s.color}">${(lv*100).toFixed(0)}% ${s.name.split(' ')[1]==='gross'?s.name.split(' ')[0]+' G':s.name.split(' ')[0]+' N'}</text>`;
+    });
+    // hover targets
+    chartPts = data.map((d,i)=>({x:x(i), d}));
+    g += `<rect x="${mL}" y="${mT}" width="${W-mL-mR}" height="${H-mT-mB}" fill="transparent" id="hoverpad"/>`;
+    g += `<line id="xh" x1="0" x2="0" y1="${mT}" y2="${H-mB}" stroke="var(--axis)" stroke-width="1" style="display:none"/>`;
+    svg.innerHTML = g;
+    const pad = svg.querySelector('#hoverpad'), xh = svg.querySelector('#xh');
+    pad.addEventListener('mousemove', ev=>{
+      const box = svg.getBoundingClientRect();
+      const mx = (ev.clientX - box.left) * (W / box.width);
+      let best = chartPts[0], bd = 1e9;
+      chartPts.forEach(p=>{ const d=Math.abs(p.x-mx); if(d<bd){bd=d;best=p;} });
+      xh.setAttribute('x1',best.x); xh.setAttribute('x2',best.x); xh.style.display='';
+      tip.style.display='block';
+      const rel = (best.x/W)*box.width;
+      tip.style.left = Math.min(rel+12, box.width-170)+'px';
+      tip.style.top = '18px';
+      tip.innerHTML = `<div class="t">Wk of ${fmtD(best.d.w.start)}${best.d.w.partial?' (partial)':''}</div>` +
+        `<div class="r"><span>SC gross</span><b>${fmtPct1(best.d.scg)}</b></div>`+
+        `<div class="r"><span>SC net</span><b>${fmtPct1(best.d.scn)}</b></div>`+
+        `<div class="r"><span>FU gross</span><b>${fmtPct1(best.d.fug)}</b></div>`+
+        `<div class="r"><span>FU net</span><b>${fmtPct1(best.d.fun)}</b></div>`;
+    });
+    pad.addEventListener('mouseleave', ()=>{ xh.style.display='none'; tip.style.display='none'; });
+  }
+
+  // ---------- doctor table ----------
+  const cols = [
+    {id:'doctor', name:'Doctor', num:false},
+    {id:'sc_hrs', name:'SC offered', num:true, title:'SC slot time available'},
+    {id:'scg', name:'SC gross', num:true},
+    {id:'scn', name:'SC net', num:true},
+    {id:'trend', name:'SC gross trend', num:false},
+    {id:'fu_hrs', name:'FU offered', num:true},
+    {id:'fug', name:'FU gross', num:true},
+    {id:'fun', name:'FU net', num:true},
+    {id:'slot', name:'Avg SC slot', num:true},
+    {id:'days', name:'Days', num:true, title:'Days with roster in period'},
+  ];
+  let sortBy = 'sc_hrs', sortDir = -1, expanded = new Set();
+
+  function sparkline(vals){
+    const w=92,h=26,p=3;
+    const vs = vals.filter(v=>v!=null);
+    if (vs.length<2) return '<span class="muted">–</span>';
+    const mx = Math.max(0.5, ...vs), mn = 0;
+    const x=i=>p+i*(w-2*p)/(vals.length-1), y=v=>p+(h-2*p)*(1-(v-mn)/(mx-mn));
+    let path='', open=false;
+    vals.forEach((v,i)=>{ if(v==null){open=false;return;} path+=(open?' L':' M')+x(i)+','+y(v); open=true; });
+    const last = vals[vals.length-1];
+    const dot = last!=null?`<circle cx="${x(vals.length-1)}" cy="${y(last)}" r="2.5" fill="var(--sc)"/>`:'';
+    return `<svg width="${w}" height="${h}"><path d="${path}" fill="none" stroke="var(--sc)" stroke-width="1.5"/>${dot}</svg>`;
+  }
+  function pctCell(v, color){
+    if (v==null) return '<span class="muted">–</span>';
+    const wpct = Math.min(100, v*100);
+    return `<span class="pctcell"><span class="bar"><i style="width:${wpct}%;background:${color}"></i></span>${fmtPct(v)}</span>`;
+  }
+
+  function docStats(rs, s, e){
+    const map = new Map();
+    rs.forEach(r=>{
+      if (!inRange(r,s,e)) return;
+      const k = r[C.doctor]||'?';
+      if (!map.has(k)) map.set(k, {doctor:k, clinics:new Set(), city:r[C.city], a:blank()});
+      const o = map.get(k);
+      o.clinics.add(r[C.locality]);
+      acc(o.a, r);
+    });
+    return [...map.values()].map(o=>({
+      doctor:o.doctor, clinics:[...o.clinics].filter(Boolean).join(', '), city:o.city,
+      sc_hrs:o.a.sc_min, scg:pct(o.a.scg,o.a.sc_min), scn:pct(o.a.scn,o.a.sc_min),
+      fu_hrs:o.a.fu_min, fug:pct(o.a.fug,o.a.fu_min), fun:pct(o.a.fun,o.a.fu_min),
+      slot:o.a.sc_slots>0?o.a.sc_min/o.a.sc_slots:null, days:o.a.days.size,
+    }));
+  }
+
+  function renderTable(rs){
+    const head = document.getElementById('headRow');
+    head.innerHTML = cols.map(c=>{
+      const arr = sortBy===c.id ? `<span class="arr">${sortDir<0?'▼':'▲'}</span>` : '';
+      return `<th data-c="${c.id}" title="${c.title||''}">${c.name} ${arr}</th>`;
+    }).join('');
+    head.querySelectorAll('th').forEach(th=>th.addEventListener('click',()=>{
+      const id = th.dataset.c;
+      if (id==='trend') return;
+      if (sortBy===id) sortDir*=-1; else { sortBy=id; sortDir = id==='doctor'?1:-1; }
+      renderTable(filtered());
+    }));
+
+    const stats = docStats(rs, period.start, period.end);
+    // weekly sc gross series per doctor for sparkline + detail
+    const byDocWeek = new Map();
+    rs.forEach(r=>{
+      const k=r[C.doctor]||'?', wkey=monday(r[C.dt]);
+      const m = byDocWeek.get(k) || new Map(); byDocWeek.set(k,m);
+      const a = m.get(wkey) || blank(); m.set(wkey,a); acc(a,r);
+    });
+
+    stats.sort((a,b)=>{
+      let av=a[sortBy], bv=b[sortBy];
+      if (typeof av==='string') return av.localeCompare(bv)* (sortDir);
+      av = av==null?-1:av; bv = bv==null?-1:bv;
+      return (av-bv)*sortDir;
+    });
+
+    document.getElementById('docCount').textContent = stats.length + (stats.length===1?' doctor':' doctors') + ' · ' + period.name +
+      ` (${fmtD(period.start)} – ${fmtD(period.end)})` + (period.note?` · ${period.note}`:'');
+    document.getElementById('tableScope').textContent = 'Click a row for the doctor’s week-by-week detail. Bars scale 0–100%.';
+
+    const body = document.getElementById('docBody');
+    if (!stats.length){ body.innerHTML = '<tr><td colspan="10" class="empty">No doctors match this selection.</td></tr>'; return; }
+    body.innerHTML = stats.map(s=>{
+      const wkMap = byDocWeek.get(s.doctor) || new Map();
+      const spark = sparkline(weeks.map(w=>{ const a=wkMap.get(w.key); return a?pct(a.scg,a.sc_min):null; }));
+      const main = `<tr class="doc" data-doc="${encodeURIComponent(s.doctor)}">
+        <td class="doctor">${s.doctor}<br><span class="clin">${s.clinics||''}</span></td>
+        <td>${s.sc_hrs>0?fmtHrs(s.sc_hrs):'<span class="muted">–</span>'}</td>
+        <td>${pctCell(s.scg,'var(--sc)')}</td>
+        <td>${pctCell(s.scn,'var(--sc-soft)')}</td>
+        <td style="text-align:right">${spark}</td>
+        <td>${s.fu_hrs>0?fmtHrs(s.fu_hrs):'<span class="muted">–</span>'}</td>
+        <td>${pctCell(s.fug,'var(--fu)')}</td>
+        <td>${pctCell(s.fun,'var(--fu-soft)')}</td>
+        <td>${s.slot!=null?s.slot.toFixed(1)+'m':'<span class="muted">–</span>'}</td>
+        <td>${s.days}</td>
+      </tr>`;
+      if (!expanded.has(s.doctor)) return main;
+      const det = weeks.map(w=>{
+        const a = wkMap.get(w.key); if(!a) return '';
+        return `<tr><td>${w.label}${w.partial?' *':''}</td>
+          <td>${fmtHrs(a.sc_min)}</td><td>${fmtPct1(pct(a.scg,a.sc_min))}</td><td>${fmtPct1(pct(a.scn,a.sc_min))}</td>
+          <td>${a.scn_slots} / ${a.sc_slots}</td>
+          <td>${fmtHrs(a.fu_min)}</td><td>${fmtPct1(pct(a.fug,a.fu_min))}</td><td>${fmtPct1(pct(a.fun,a.fu_min))}</td>
+          <td>${a.fun_slots} / ${a.fu_slots}</td><td>${a.days.size}</td></tr>`;
+      }).join('');
+      return main + `<tr class="detail"><td colspan="10"><div class="inner"><table>
+        <thead><tr><th style="text-align:left">Week</th><th>SC offered</th><th>SC gross</th><th>SC net</th><th>SC done/slots</th>
+        <th>FU offered</th><th>FU gross</th><th>FU net</th><th>FU done/slots</th><th>Days</th></tr></thead>
+        <tbody>${det}</tbody></table></div></td></tr>`;
+    }).join('');
+    body.querySelectorAll('tr.doc').forEach(tr=>tr.addEventListener('click',()=>{
+      const d = decodeURIComponent(tr.dataset.doc);
+      expanded.has(d) ? expanded.delete(d) : expanded.add(d);
+      renderTable(filtered());
+    }));
+  }
+
+  // ---------- period pills ----------
+  const pillBox = document.getElementById('periodPills');
+  pillBox.innerHTML = periods.map(p=>`<button data-p="${p.id}" class="${p.id===period.id?'on':''}">${p.name}</button>`).join('');
+  pillBox.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    period = periods.find(p=>p.id===b.dataset.p);
+    pillBox.querySelectorAll('button').forEach(x=>x.classList.toggle('on', x.dataset.p===period.id));
+    renderAll();
+  }));
+
+  function renderAll(){
+    const rs = filtered();
+    const scope = [selCity.value||'All cities', selClinic.value||'all clinics'].join(' · ');
+    document.getElementById('chartScope').textContent = scope + ' · * = partial week';
+    renderKpis(rs); renderChart(rs); renderTable(rs);
+  }
+  selCity.addEventListener('change', ()=>{ refreshClinics(); renderAll(); });
+  selClinic.addEventListener('change', renderAll);
+  window.addEventListener('resize', ()=>{ clearTimeout(window._t); window._t=setTimeout(()=>renderChart(filtered()),150); });
+  renderAll();
+})();
+
+// ---------------- tab switching ----------------
+(function(){
+  const bDoc = document.getElementById('tabBtnDoc'), bTher = document.getElementById('tabBtnTher');
+  const vDoc = document.getElementById('tab-doctors'), vTher = document.getElementById('tab-therapists');
+  function show(which){
+    const doc = which==='doc';
+    vDoc.style.display = doc?'':'none'; vTher.style.display = doc?'none':'';
+    bDoc.classList.toggle('on',doc); bTher.classList.toggle('on',!doc);
+    window.dispatchEvent(new Event('resize'));
+  }
+  bDoc.addEventListener('click',()=>show('doc'));
+  bTher.addEventListener('click',()=>show('ther'));
+})();
+
+// ---------------- therapist tab ----------------
+(function(){
+  const D = window.THER_DATA;
+  const body = document.getElementById('tBody');
+  if (!D || !D.rows || !D.rows.length) {
+    body.innerHTML = '<tr><td colspan="10" class="empty">No data — run fetch_therapist_data.py first.</td></tr>';
+    return;
+  }
+  const C = {}; D.columns.forEach((c,i)=>C[c]=i);
+  const rows = D.rows;
+
+  const parse = s => new Date(s + 'T00:00:00');
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  function monday(s){ const d = parse(s); const dow = (d.getDay()+6)%7; d.setDate(d.getDate()-dow); return iso(d); }
+  function addDays(s,n){ const d = parse(s); d.setDate(d.getDate()+n); return iso(d); }
+  const fmtD = s => parse(s).toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+
+  const allDates = [...new Set(rows.map(r=>r[C.dt]))].sort();
+  const maxDt = allDates[allDates.length-1];
+  const curMon = monday(maxDt);
+  const weekKeys = [...new Set(allDates.map(monday))].sort();
+  const weeks = weekKeys.map(k => ({key:k, start:k, end:addDays(k,6),
+    partial: k===curMon && maxDt < addDays(k,6),
+    label: fmtD(k)+'–'+fmtD(addDays(k,6))}));
+  const fullWeeks = weeks.filter(w=>!w.partial);
+  const lastFull = fullWeeks[fullWeeks.length-1];
+
+  function monthRange(offset){
+    const d = parse(maxDt); d.setDate(1); d.setMonth(d.getMonth()+offset);
+    const s = iso(d); d.setMonth(d.getMonth()+1); d.setDate(0);
+    return [s, iso(d)];
+  }
+  const periods = [];
+  if (lastFull) periods.push({id:'lastwk', name:'Last week', start:lastFull.start, end:lastFull.end,
+                              prev:[addDays(lastFull.start,-7), addDays(lastFull.end,-7)]});
+  const wk = weeks[weeks.length-1];
+  periods.push({id:'thiswk', name:'This week', start:wk.start, end:wk.end,
+                prev:[addDays(wk.start,-7), addDays(wk.end,-7)], note: wk.partial?'partial week':null});
+  if (fullWeeks.length >= 4){
+    const s = fullWeeks[fullWeeks.length-4].start, e = lastFull.end;
+    periods.push({id:'l4w', name:'Last 4 weeks', start:s, end:e, prev:[addDays(s,-28), addDays(e,-28)]});
+  }
+  const [tmS] = monthRange(0);
+  periods.push({id:'thismo', name:'This month', start:tmS, end:maxDt, prev:monthRange(-1)});
+  const [lmS,lmE] = monthRange(-1);
+  periods.push({id:'lastmo', name:'Last month', start:lmS, end:lmE, prev:monthRange(-2)});
+  let period = periods[0];
+
+  const selLoc = document.getElementById('tLoc');
+  const selProg = document.getElementById('tProg');
+  function filtered(){
+    const loc = selLoc.value, prog = selProg.value;
+    return rows.filter(r => (!loc || r[C.channel]===loc) && (!prog || r[C.program]===prog));
+  }
+  const inRange = (r,s,e) => r[C.dt]>=s && r[C.dt]<=e;
+
+  function blank(){ return {off:0, off_g:0, off_n:0, on:0, on_g:0, on_n:0,
+                            off_slots:0, on_slots:0, off_ns:0, on_ns:0, days:new Set()}; }
+  function acc(a,r){
+    const off = r[C.channel]==='Offline';
+    if (off){ a.off += r[C.mins]||0; a.off_g += r[C.gross_min]||0; a.off_n += r[C.net_min]||0;
+              a.off_slots += r[C.slots]||0; a.off_ns += r[C.net_slots]||0; }
+    else    { a.on += r[C.mins]||0; a.on_g += r[C.gross_min]||0; a.on_n += r[C.net_min]||0;
+              a.on_slots += r[C.slots]||0; a.on_ns += r[C.net_slots]||0; }
+    if ((r[C.mins]||0) > 0) a.days.add(r[C.dt]);
+  }
+  const agg = rs => { const a=blank(); rs.forEach(r=>acc(a,r)); return a; };
+  const pct = (n,d) => d>0 ? n/d : null;
+  const fmtPct = v => v==null ? '–' : (v*100).toFixed(0)+'%';
+  const fmtPct1 = v => v==null ? '–' : (v*100).toFixed(1)+'%';
+  const fmtHrs = m => m>=5940 ? (m/60).toFixed(0)+'h' : (m/60).toFixed(1)+'h';
+
+  function deltaHtml(cur, prev, isPct, absFmt){
+    if (cur==null || prev==null) return '<span class="muted">no prior data</span>';
+    const d = isPct ? (cur-prev)*100 : (cur-prev);
+    const cls = d >= 0 ? 'up' : 'dn';
+    const val = isPct ? Math.abs(d).toFixed(1)+' pp' : (absFmt?absFmt(Math.abs(d)):Math.abs(d).toFixed(0));
+    return `<span class="${cls}">${d>=0?'▲':'▼'} ${val}</span> vs prior`;
+  }
+  function renderKpis(rs){
+    const cur = agg(rs.filter(r=>inRange(r,period.start,period.end)));
+    const prv = agg(rs.filter(r=>inRange(r,period.prev[0],period.prev[1])));
+    const act = new Set(rs.filter(r=>inRange(r,period.start,period.end) && (r[C.mins]||0)>0).map(r=>r[C.therapist])).size;
+    const pact = new Set(rs.filter(r=>inRange(r,period.prev[0],period.prev[1]) && (r[C.mins]||0)>0).map(r=>r[C.therapist])).size;
+    const loc = selLoc.value;
+    let items = [];
+    if (loc !== 'Online') items.push(
+      {lbl:'Offline gross util', v:pct(cur.off_g,cur.off), p:pct(prv.off_g,prv.off), f:fmtPct1, isPct:true},
+      {lbl:'Offline net util', v:pct(cur.off_n,cur.off), p:pct(prv.off_n,prv.off), f:fmtPct1, isPct:true},
+      {lbl:'Offline hrs offered', v:cur.off, p:prv.off, f:fmtHrs, dFmt:fmtHrs});
+    if (loc !== 'Offline') items.push(
+      {lbl:'Online gross util', v:pct(cur.on_g,cur.on), p:pct(prv.on_g,prv.on), f:fmtPct1, isPct:true},
+      {lbl:'Online net util', v:pct(cur.on_n,cur.on), p:pct(prv.on_n,prv.on), f:fmtPct1, isPct:true},
+      {lbl:'Online hrs offered', v:cur.on, p:prv.on, f:fmtHrs, dFmt:fmtHrs});
+    items.push({lbl:'Therapists active', v:act, p:pact, f:x=>String(x)});
+    document.getElementById('tKpis').innerHTML = items.map(it=>`
+      <div class="kpi">
+        <div class="lbl">${it.lbl}</div>
+        <div class="val">${it.v==null?'–':it.f(it.v)}</div>
+        <div class="delta">${deltaHtml(it.v,it.p,it.isPct,it.dFmt)}</div>
+      </div>`).join('');
+  }
+
+  const svg = document.getElementById('tChart');
+  const tip = document.getElementById('tTooltip');
+  function seriesDef(){
+    const loc = selLoc.value;
+    const s = [];
+    if (loc !== 'Online') s.push({k:'offg', color:'var(--sc)', dash:'', name:'Offline gross'},
+                                 {k:'offn', color:'var(--sc)', dash:'4 3', name:'Offline net'});
+    if (loc !== 'Offline') s.push({k:'ong', color:'var(--fu)', dash:'', name:'Online gross'},
+                                  {k:'onn', color:'var(--fu)', dash:'4 3', name:'Online net'});
+    return s;
+  }
+  function renderLegend(){
+    document.getElementById('tLegend').innerHTML = seriesDef().map(s=>
+      `<span class="key"><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="${s.color}" stroke-width="2.5" ${s.dash?`stroke-dasharray="${s.dash}"`:''}/></svg>${s.name}</span>`).join('');
+  }
+  function renderChart(rs){
+    const data = weeks.map(w=>{
+      const a = agg(rs.filter(r=>inRange(r,w.start,w.end)));
+      return {w, offg:pct(a.off_g,a.off), offn:pct(a.off_n,a.off), ong:pct(a.on_g,a.on), onn:pct(a.on_n,a.on)};
+    }).filter(d=>d.offg!=null || d.ong!=null);
+    const W = svg.clientWidth || 1000, H = 240, mL=44, mR=96, mT=12, mB=28;
+    svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.innerHTML='';
+    if (!data.length) return;
+    const ser = seriesDef();
+    const vals = data.flatMap(d=>ser.map(s=>d[s.k]).filter(v=>v!=null));
+    if (!vals.length) return;
+    const maxV = Math.min(1, Math.max(0.5, ...vals)*1.15);
+    const x = i => mL + (data.length===1 ? (W-mL-mR)/2 : i*(W-mL-mR)/(data.length-1));
+    const y = v => mT + (H-mT-mB)*(1 - v/maxV);
+    let g = '';
+    const step = maxV > 0.6 ? 0.2 : 0.1;
+    for (let v=0; v<=maxV+1e-9; v+=step){
+      g += `<line x1="${mL}" y1="${y(v)}" x2="${W-mR}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>`;
+      g += `<text x="${mL-8}" y="${y(v)+4}" text-anchor="end" font-size="11" fill="var(--ink-3)">${Math.round(v*100)}%</text>`;
+    }
+    data.forEach((d,i)=>{ g += `<text x="${x(i)}" y="${H-8}" text-anchor="middle" font-size="11" fill="var(--ink-3)">${fmtD(d.w.start)}${d.w.partial?'*':''}</text>`; });
+    ser.forEach(s=>{
+      const pts = data.map((d,i)=>d[s.k]==null?null:`${x(i)},${y(d[s.k])}`);
+      let path='', open=false;
+      pts.forEach(p=>{ if(p==null){open=false;return;} path += (open?' L':' M')+p; open=true; });
+      g += `<path d="${path}" fill="none" stroke="${s.color}" stroke-width="2" stroke-dasharray="${s.dash}"/>`;
+      const li = data.length-1, lv = data[li][s.k];
+      if (lv!=null){
+        const short = (s.name.startsWith('Off')?'Off':'On') + ' ' + (s.name.endsWith('gross')?'G':'N');
+        g += `<text x="${x(li)+7}" y="${y(lv)+4}" font-size="11" font-weight="600" fill="${s.color}">${(lv*100).toFixed(0)}% ${short}</text>`;
+      }
+    });
+    const pts2 = data.map((d,i)=>({x:x(i), d}));
+    g += `<rect x="${mL}" y="${mT}" width="${W-mL-mR}" height="${H-mT-mB}" fill="transparent" id="tHoverpad"/>`;
+    g += `<line id="tXh" x1="0" x2="0" y1="${mT}" y2="${H-mB}" stroke="var(--axis)" stroke-width="1" style="display:none"/>`;
+    svg.innerHTML = g;
+    const pad = svg.querySelector('#tHoverpad'), xh = svg.querySelector('#tXh');
+    pad.addEventListener('mousemove', ev=>{
+      const box = svg.getBoundingClientRect();
+      const mx = (ev.clientX - box.left) * (W / box.width);
+      let best = pts2[0], bd = 1e9;
+      pts2.forEach(p=>{ const dd=Math.abs(p.x-mx); if(dd<bd){bd=dd;best=p;} });
+      xh.setAttribute('x1',best.x); xh.setAttribute('x2',best.x); xh.style.display='';
+      tip.style.display='block';
+      tip.style.left = Math.min((best.x/W)*box.width+12, box.width-170)+'px';
+      tip.style.top = '18px';
+      tip.innerHTML = `<div class="t" style="font-weight:600;margin-bottom:4px">Wk of ${fmtD(best.d.w.start)}${best.d.w.partial?' (partial)':''}</div>` +
+        seriesDef().map(s=>`<div class="r" style="display:flex;justify-content:space-between;gap:14px;color:var(--ink-2)"><span>${s.name}</span><b style="color:var(--ink-1)">${fmtPct1(best.d[s.k])}</b></div>`).join('');
+    });
+    pad.addEventListener('mouseleave', ()=>{ xh.style.display='none'; tip.style.display='none'; });
+  }
+
+  const cols = [
+    {id:'therapist', name:'Therapist'},
+    {id:'off_hrs', name:'Offline offered'},
+    {id:'offg', name:'Off gross'},
+    {id:'offn', name:'Off net'},
+    {id:'on_hrs', name:'Online offered'},
+    {id:'ong', name:'On gross'},
+    {id:'onn', name:'On net'},
+    {id:'trend', name:'Gross trend'},
+    {id:'days', name:'Days'},
+  ];
+  let sortBy = 'on_hrs', sortDir = -1, expanded = new Set();
+
+  function sparkline(vals){
+    const w=92,h=26,p=3;
+    const vs = vals.filter(v=>v!=null);
+    if (vs.length<2) return '<span class="muted">–</span>';
+    const mx = Math.max(0.5, ...vs);
+    const x=i=>p+i*(w-2*p)/(vals.length-1), y=v=>p+(h-2*p)*(1-v/mx);
+    let path='', open=false;
+    vals.forEach((v,i)=>{ if(v==null){open=false;return;} path+=(open?' L':' M')+x(i)+','+y(v); open=true; });
+    const last = vals[vals.length-1];
+    const dot = last!=null?`<circle cx="${x(vals.length-1)}" cy="${y(last)}" r="2.5" fill="var(--sc)"/>`:'';
+    return `<svg width="${w}" height="${h}"><path d="${path}" fill="none" stroke="var(--sc)" stroke-width="1.5"/>${dot}</svg>`;
+  }
+  function pctCell(v, color){
+    if (v==null) return '<span class="muted">–</span>';
+    return `<span class="pctcell"><span class="bar"><i style="width:${Math.min(100,v*100)}%;background:${color}"></i></span>${fmtPct(v)}</span>`;
+  }
+
+  function renderTable(rs){
+    const head = document.getElementById('tHeadRow');
+    head.innerHTML = cols.map(c=>{
+      const arr = sortBy===c.id ? `<span class="arr">${sortDir<0?'▼':'▲'}</span>` : '';
+      return `<th data-c="${c.id}">${c.name} ${arr}</th>`;
+    }).join('');
+    head.querySelectorAll('th').forEach(th=>th.addEventListener('click',()=>{
+      const id = th.dataset.c;
+      if (id==='trend') return;
+      if (sortBy===id) sortDir*=-1; else { sortBy=id; sortDir = id==='therapist'?1:-1; }
+      renderTable(filtered());
+    }));
+
+    const map = new Map();
+    rs.forEach(r=>{
+      if (!inRange(r,period.start,period.end)) return;
+      const k = r[C.therapist];
+      if (!map.has(k)) map.set(k, {therapist:k, program:r[C.program], a:blank()});
+      acc(map.get(k).a, r);
+    });
+    const stats = [...map.values()].map(o=>({
+      therapist:o.therapist, program:o.program,
+      off_hrs:o.a.off, offg:pct(o.a.off_g,o.a.off), offn:pct(o.a.off_n,o.a.off),
+      on_hrs:o.a.on, ong:pct(o.a.on_g,o.a.on), onn:pct(o.a.on_n,o.a.on),
+      days:o.a.days.size,
+    }));
+    stats.sort((a,b)=>{
+      let av=a[sortBy], bv=b[sortBy];
+      if (typeof av==='string') return av.localeCompare(bv)*sortDir;
+      av = av==null?-1:av; bv = bv==null?-1:bv;
+      return (av-bv)*sortDir;
+    });
+
+    const byTherWeek = new Map();
+    rs.forEach(r=>{
+      const k=r[C.therapist], wkey=monday(r[C.dt]);
+      const m = byTherWeek.get(k) || new Map(); byTherWeek.set(k,m);
+      const a = m.get(wkey) || blank(); m.set(wkey,a); acc(a,r);
+    });
+
+    document.getElementById('tCount').textContent = stats.length + (stats.length===1?' therapist':' therapists') +
+      ' · ' + period.name + ` (${fmtD(period.start)} – ${fmtD(period.end)})` + (period.note?` · ${period.note}`:'');
+
+    if (!stats.length){ body.innerHTML = '<tr><td colspan="9" class="empty">No therapists match this selection.</td></tr>'; return; }
+    body.innerHTML = stats.map(s=>{
+      const wkMap = byTherWeek.get(s.therapist) || new Map();
+      const spark = sparkline(weeks.map(w=>{ const a=wkMap.get(w.key); if(!a) return null;
+        return pct(a.off_g+a.on_g, a.off+a.on); }));
+      const main = `<tr class="doc" data-doc="${encodeURIComponent(s.therapist)}">
+        <td class="doctor">${s.therapist} <span class="prog">${s.program}</span></td>
+        <td>${s.off_hrs>0?fmtHrs(s.off_hrs):'<span class="muted">–</span>'}</td>
+        <td>${pctCell(s.offg,'var(--sc)')}</td>
+        <td>${pctCell(s.offn,'var(--sc-soft)')}</td>
+        <td>${s.on_hrs>0?fmtHrs(s.on_hrs):'<span class="muted">–</span>'}</td>
+        <td>${pctCell(s.ong,'var(--fu)')}</td>
+        <td>${pctCell(s.onn,'var(--fu-soft)')}</td>
+        <td style="text-align:right">${spark}</td>
+        <td>${s.days}</td>
+      </tr>`;
+      if (!expanded.has(s.therapist)) return main;
+      const det = weeks.map(w=>{
+        const a = wkMap.get(w.key); if(!a) return '';
+        return `<tr><td>${w.label}${w.partial?' *':''}</td>
+          <td>${fmtHrs(a.off)}</td><td>${fmtPct1(pct(a.off_g,a.off))}</td><td>${fmtPct1(pct(a.off_n,a.off))}</td>
+          <td>${fmtHrs(a.on)}</td><td>${fmtPct1(pct(a.on_g,a.on))}</td><td>${fmtPct1(pct(a.on_n,a.on))}</td>
+          <td>${a.off_ns+a.on_ns} / ${a.off_slots+a.on_slots}</td><td>${a.days.size}</td></tr>`;
+      }).join('');
+      return main + `<tr class="detail"><td colspan="9"><div class="inner"><table>
+        <thead><tr><th style="text-align:left">Week</th><th>Off offered</th><th>Off gross</th><th>Off net</th>
+        <th>On offered</th><th>On gross</th><th>On net</th><th>Done/slots</th><th>Days</th></tr></thead>
+        <tbody>${det}</tbody></table></div></td></tr>`;
+    }).join('');
+    body.querySelectorAll('tr.doc').forEach(tr=>tr.addEventListener('click',()=>{
+      const d = decodeURIComponent(tr.dataset.doc);
+      expanded.has(d) ? expanded.delete(d) : expanded.add(d);
+      renderTable(filtered());
+    }));
+  }
+
+  const pillBox = document.getElementById('tPeriodPills');
+  pillBox.innerHTML = periods.map(p=>`<button data-p="${p.id}" class="${p.id===period.id?'on':''}">${p.name}</button>`).join('');
+  pillBox.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    period = periods.find(p=>p.id===b.dataset.p);
+    pillBox.querySelectorAll('button').forEach(x=>x.classList.toggle('on', x.dataset.p===period.id));
+    renderAll();
+  }));
+
+  function renderAll(){
+    const rs = filtered();
+    document.getElementById('tChartScope').textContent =
+      (selLoc.value||'All locations') + ' · ' + (selProg.value?selProg.value+' program':'all programs') + ' · * = partial week';
+    renderLegend(); renderKpis(rs); renderChart(rs); renderTable(rs);
+  }
+  selLoc.addEventListener('change', renderAll);
+  selProg.addEventListener('change', renderAll);
+  window.addEventListener('resize', ()=>{ clearTimeout(window._tt); window._tt=setTimeout(()=>renderChart(filtered()),150); });
+  renderAll();
+})();
+</script>
+</body>
+</html>
