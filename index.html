@@ -432,7 +432,8 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
     {id:'fug', name:'FU gross', num:true},
     {id:'fun', name:'FU net', num:true},
     {id:'slot', name:'Avg SC slot', num:true},
-    {id:'days', name:'Days', num:true, title:'Days with roster in period'},
+    {id:'fuslot', name:'Avg FU slot', num:true},
+    {id:'days', name:'Active days', num:true, title:'Days with roster in period'},
   ];
   let sortBy = 'sc_hrs', sortDir = -1, expanded = new Set();
 
@@ -468,7 +469,8 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
       doctor:o.doctor, clinics:[...o.clinics].filter(Boolean).join(', '), city:o.city,
       sc_hrs:o.a.sc_min, scg:pct(o.a.scg,o.a.sc_min), scn:pct(o.a.scn,o.a.sc_min),
       fu_hrs:o.a.fu_min, fug:pct(o.a.fug,o.a.fu_min), fun:pct(o.a.fun,o.a.fu_min),
-      slot:o.a.sc_slots>0?o.a.sc_min/o.a.sc_slots:null, days:o.a.days.size,
+      slot:o.a.sc_slots>0?o.a.sc_min/o.a.sc_slots:null,
+      fuslot:o.a.fu_slots>0?o.a.fu_min/o.a.fu_slots:null, days:o.a.days.size,
     }));
   }
 
@@ -506,7 +508,7 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
     document.getElementById('tableScope').textContent = 'Click a row for the doctor’s week-by-week detail. Bars scale 0–100%.';
 
     const body = document.getElementById('docBody');
-    if (!stats.length){ body.innerHTML = '<tr><td colspan="10" class="empty">No doctors match this selection.</td></tr>'; return; }
+    if (!stats.length){ body.innerHTML = '<tr><td colspan="11" class="empty">No doctors match this selection.</td></tr>'; return; }
     body.innerHTML = stats.map(s=>{
       const wkMap = byDocWeek.get(s.doctor) || new Map();
       const spark = sparkline(weeks.map(w=>{ const a=wkMap.get(w.key); return a?pct(a.scg,a.sc_min):null; }));
@@ -520,6 +522,7 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
         <td>${pctCell(s.fug,'var(--fu)')}</td>
         <td>${pctCell(s.fun,'var(--fu-soft)')}</td>
         <td>${s.slot!=null?s.slot.toFixed(1)+'m':'<span class="muted">–</span>'}</td>
+        <td>${s.fuslot!=null?s.fuslot.toFixed(1)+'m':'<span class="muted">–</span>'}</td>
         <td>${s.days}</td>
       </tr>`;
       if (!expanded.has(s.doctor)) return main;
@@ -531,7 +534,7 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
           <td>${fmtHrs(a.fu_min)}</td><td>${fmtPct1(pct(a.fug,a.fu_min))}</td><td>${fmtPct1(pct(a.fun,a.fu_min))}</td>
           <td>${a.fun_slots} / ${a.fu_slots}</td><td>${a.days.size}</td></tr>`;
       }).join('');
-      return main + `<tr class="detail"><td colspan="10"><div class="inner"><table>
+      return main + `<tr class="detail"><td colspan="11"><div class="inner"><table>
         <thead><tr><th style="text-align:left">Week</th><th>SC offered</th><th>SC gross</th><th>SC net</th><th>SC done/slots</th>
         <th>FU offered</th><th>FU gross</th><th>FU net</th><th>FU done/slots</th><th>Days</th></tr></thead>
         <tbody>${det}</tbody></table></div></td></tr>`;
