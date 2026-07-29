@@ -89,11 +89,11 @@ select, input[type=search] {
 #tooltip .r { display:flex; justify-content:space-between; gap:14px; color:var(--ink-2); }
 #tooltip .r b { color:var(--ink-1); font-weight:600; }
 
-table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
-th, td { padding:7px 8px; text-align:right; white-space:nowrap; }
+table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; font-size:13px; }
+th, td { padding:5px 6px; text-align:right; white-space:nowrap; }
 th:first-child, td:first-child { text-align:left; }
 th {
-  font-size:11px; color:var(--ink-3); font-weight:600; text-transform:uppercase; letter-spacing:.03em;
+  font-size:10px; color:var(--ink-3); font-weight:600; text-transform:uppercase; letter-spacing:.02em;
   border-bottom:1px solid var(--axis); cursor:pointer; user-select:none; position:sticky; top:0; background:var(--surface-1);
 }
 th .arr { font-size:9px; }
@@ -102,7 +102,7 @@ tbody tr.doc:hover { background:var(--track); cursor:pointer; }
 td.doctor { font-weight:600; max-width:220px; overflow:hidden; text-overflow:ellipsis; }
 td .clin { color:var(--ink-3); font-weight:400; font-size:11px; }
 .pctcell { display:inline-flex; align-items:center; gap:8px; justify-content:flex-end; }
-.bar { width:58px; height:6px; background:var(--track); border-radius:3px; overflow:hidden; }
+.bar { width:40px; height:6px; background:var(--track); border-radius:3px; overflow:hidden; }
 .bar i { display:block; height:100%; border-radius:3px; }
 .muted { color:var(--ink-3); }
 tr.detail td { padding:0; }
@@ -427,7 +427,7 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
     {id:'sc_hrs', name:'SC offered', num:true, title:'SC slot time available'},
     {id:'scg', name:'SC gross', num:true},
     {id:'scn', name:'SC net', num:true},
-    {id:'trend', name:'SC gross trend', num:false},
+    {id:'trend', name:'Trend', num:false, title:'SC gross utilization by week'},
     {id:'fu_hrs', name:'FU offered', num:true},
     {id:'fug', name:'FU gross', num:true},
     {id:'fun', name:'FU net', num:true},
@@ -438,7 +438,7 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
   let sortBy = 'sc_hrs', sortDir = -1, expanded = new Set();
 
   function sparkline(vals){
-    const w=92,h=26,p=3;
+    const w=70,h=24,p=3;
     const vs = vals.filter(v=>v!=null);
     if (vs.length<2) return '<span class="muted">–</span>';
     const mx = Math.max(0.5, ...vs), mn = 0;
@@ -704,7 +704,7 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
       const a = agg(rs.filter(r=>inRange(r,w.start,w.end)));
       return {w, offg:pct(a.off_g,a.off), offn:pct(a.off_n,a.off), ong:pct(a.on_g,a.on), onn:pct(a.on_n,a.on)};
     }).filter(d=>d.offg!=null || d.ong!=null);
-    const W = svg.clientWidth || 1000, H = 240, mL=44, mR=96, mT=12, mB=28;
+    const W = svg.clientWidth || 1000, H = 240, mL=44, mR=150, mT=12, mB=28;
     svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.innerHTML='';
     if (!data.length) return;
     const ser = seriesDef();
@@ -727,8 +727,7 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
       g += `<path d="${path}" fill="none" stroke="${s.color}" stroke-width="2" stroke-dasharray="${s.dash}"/>`;
       const li = data.length-1, lv = data[li][s.k];
       if (lv!=null){
-        const short = (s.name.startsWith('Off')?'Off':'On') + ' ' + (s.name.endsWith('gross')?'G':'N');
-        g += `<text x="${x(li)+7}" y="${y(lv)+4}" font-size="11" font-weight="600" fill="${s.color}">${(lv*100).toFixed(0)}% ${short}</text>`;
+        g += `<text x="${x(li)+7}" y="${y(lv)+4}" font-size="11" font-weight="600" fill="${s.color}">${(lv*100).toFixed(0)}% ${s.name}</text>`;
       }
     });
     const pts2 = data.map((d,i)=>({x:x(i), d}));
@@ -754,18 +753,18 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
   const cols = [
     {id:'therapist', name:'Therapist'},
     {id:'off_hrs', name:'Offline offered'},
-    {id:'offg', name:'Off gross'},
-    {id:'offn', name:'Off net'},
+    {id:'offg', name:'Offline gross'},
+    {id:'offn', name:'Offline net'},
     {id:'on_hrs', name:'Online offered'},
-    {id:'ong', name:'On gross'},
-    {id:'onn', name:'On net'},
+    {id:'ong', name:'Online gross'},
+    {id:'onn', name:'Online net'},
     {id:'trend', name:'Gross trend'},
     {id:'days', name:'Days'},
   ];
   let sortBy = 'on_hrs', sortDir = -1, expanded = new Set();
 
   function sparkline(vals){
-    const w=92,h=26,p=3;
+    const w=70,h=24,p=3;
     const vs = vals.filter(v=>v!=null);
     if (vs.length<2) return '<span class="muted">–</span>';
     const mx = Math.max(0.5, ...vs);
@@ -849,8 +848,8 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
           <td>${a.off_ns+a.on_ns} / ${a.off_slots+a.on_slots}</td><td>${a.days.size}</td></tr>`;
       }).join('');
       return main + `<tr class="detail"><td colspan="9"><div class="inner"><table>
-        <thead><tr><th style="text-align:left">Week</th><th>Off offered</th><th>Off gross</th><th>Off net</th>
-        <th>On offered</th><th>On gross</th><th>On net</th><th>Done/slots</th><th>Days</th></tr></thead>
+        <thead><tr><th style="text-align:left">Week</th><th>Offline offered</th><th>Offline gross</th><th>Offline net</th>
+        <th>Online offered</th><th>Online gross</th><th>Online net</th><th>Done/slots</th><th>Days</th></tr></thead>
         <tbody>${det}</tbody></table></div></td></tr>`;
     }).join('');
     body.querySelectorAll('tr.doc').forEach(tr=>tr.addEventListener('click',()=>{
