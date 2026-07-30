@@ -90,17 +90,19 @@ ORDER BY 1,2"""
 
 Q_APPTS = f"""SELECT t.code, COALESCE(a.program,'null') AS program, a.status,
        CAST(DATEADD(minute,330,a.start_time) AS DATE) AS dt,
+       EXTRACT(HOUR FROM DATEADD(minute,330,a.start_time)) AS hr,
        COUNT(*) AS n, SUM(DATEDIFF(minute,a.start_time,a.end_time)) AS mins
 FROM allo_consultations.appointments a
 JOIN allo_consultations.types t ON a.type_id=t.id
 WHERE a.provider_id='{PROVIDER}' AND a.deleted_at IS NULL
   AND t.code IN ('SC','FU','RR','PQ')
   AND CAST(DATEADD(minute,330,a.start_time) AS DATE) BETWEEN '{WEEK_START}' AND '{WEEK_END}'
-GROUP BY 1,2,3,4 ORDER BY 4,1,2,3"""
+GROUP BY 1,2,3,4,5 ORDER BY 4,5,1,2,3"""
 
-Q_SLOTS = f"""SELECT dt, typ, dur, COUNT(*) AS slots, SUM(booked) AS booked
+Q_SLOTS = f"""SELECT dt, hr, typ, dur, COUNT(*) AS slots, SUM(booked) AS booked
 FROM (
   SELECT CAST(DATEADD(minute,330,rs.start_time) AS DATE) AS dt,
+         EXTRACT(HOUR FROM DATEADD(minute,330,rs.start_time)) AS hr,
          CASE WHEN rs.type_id='{SC}' THEN 'SC' ELSE 'RPT' END AS typ,
          rs.start_time,
          MAX(DATEDIFF(minute,rs.start_time,rs.end_time)) AS dur,
@@ -116,8 +118,8 @@ FROM (
     AND ((rs.is_booked=1 AND rs.overlaps_other_booked_type=0)
       OR (rs.available_for_booking=1 AND ((rs.type_id='{SC}' AND rs.in_repeat_boundary=0)
                                        OR (rs.type_id='{RPT}' AND rs.in_repeat_boundary=1))))
-  GROUP BY 1,2,3
-) x GROUP BY 1,2,3 ORDER BY 1,2,3"""
+  GROUP BY 1,2,3,4
+) x GROUP BY 1,2,3,4 ORDER BY 1,2,3,4"""
 
 Q_LOC = f"""SELECT DISTINCT COALESCE(l.name,'?'), COALESCE(l.locality,''), COALESCE(l.city,'')
 FROM allo_consultations.appointments a
@@ -130,8 +132,8 @@ def main():
     doctor = run_query(Q_DOCTOR, "doctor")[0][0]
     configs = [{"type": r[0], "program": r[1], "mins": r[2]} for r in run_query(Q_CONFIGS, "configs")]
     appts = [{"type": r[0], "program": r[1], "status": r[2], "dt": str(r[3])[:10],
-              "n": r[4], "mins": r[5]} for r in run_query(Q_APPTS, "appointments")]
-    slots = [{"dt": str(r[0])[:10], "typ": r[1], "dur": r[2], "slots": r[3], "booked": r[4]}
+              "hr": int(r[4]), "n": r[5], "mins": r[6]} for r in run_query(Q_APPTS, "appointments")]
+    slots = [{"dt": str(r[0])[:10], "hr": int(r[1]), "typ": r[2], "dur": r[3], "slots": r[4], "booked": r[5]}
              for r in run_query(Q_SLOTS, "slots")]
     locs = [" ".join(x for x in (r[0], r[1], r[2]) if x) for r in run_query(Q_LOC, "locations")]
     payload = {

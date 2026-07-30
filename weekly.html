@@ -37,6 +37,13 @@ header .sub a { color:var(--sh); text-decoration:none; }
 .chip { background:var(--surface-1); border:1px solid var(--border); border-radius:8px;
   padding:7px 12px; font-size:12px; color:var(--ink-2); }
 .chip b { color:var(--ink-1); font-size:14px; }
+.pills { display:inline-flex; gap:4px; background:var(--track); padding:3px; border-radius:8px;
+  margin:14px 0 2px; flex-wrap:wrap; }
+.pills button { font:inherit; font-size:12px; border:0; background:transparent; color:var(--ink-2);
+  padding:5px 10px; border-radius:6px; cursor:pointer; }
+.pills button.on { background:var(--surface-1); color:var(--ink-1); font-weight:600;
+  box-shadow:0 1px 2px rgba(0,0,0,.12); }
+.pills button:disabled { opacity:.4; cursor:default; }
 .card { background:var(--surface-1); border:1px solid var(--border); border-radius:10px;
   padding:16px; margin:16px 0; }
 .card h2 { font-size:15px; margin:0 0 2px; }
@@ -58,10 +65,10 @@ th:first-child, td:first-child { text-align:left; }
 th { font-size:10px; color:var(--ink-3); font-weight:600; text-transform:uppercase;
   letter-spacing:.02em; border-bottom:1px solid var(--axis); }
 tbody tr { border-bottom:1px solid var(--grid); }
+tbody tr.pick { cursor:pointer; }
+tbody tr.pick:hover { background:var(--track); }
+tbody tr.sel td { font-weight:650; background:var(--track); }
 tr.total td { font-weight:650; border-top:1px solid var(--axis); }
-.pill { display:inline-block; font-size:10px; font-weight:600; border-radius:5px; padding:1px 6px; }
-.pill.sh { background:var(--sh-soft); color:#fff; mix-blend-mode:normal; }
-.pill.mh { background:var(--mh-soft); color:#fff; }
 .muted { color:var(--ink-3); }
 .insights { border-left:3px solid var(--sh); }
 .insights li { margin:6px 0; line-height:1.5; }
@@ -88,8 +95,10 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
   <div class="chips" id="chips"></div>
   <div class="defn" id="unitNote"></div>
 
+  <div class="pills" id="scopePills"></div>
+
   <div class="card" id="scCard">
-    <h2>Screening Calls (SC)</h2>
+    <h2>Screening Calls (SC) <span class="muted" id="scScope" style="font-size:12px;font-weight:400"></span></h2>
     <div class="note">The roster is cut into SH-sized SC units; one MH screening consumes multiple consecutive units.</div>
     <div class="minis" id="scMinis"></div>
     <div class="barwrap"><div class="stackbar" id="scBar"></div></div>
@@ -98,7 +107,7 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
   </div>
 
   <div class="card" id="rptCard">
-    <h2>Repeats (FU · Report Reading · Patient Queries)</h2>
+    <h2>Repeats (FU · Report Reading · Patient Queries) <span class="muted" id="rptScope" style="font-size:12px;font-weight:400"></span></h2>
     <div class="note">Repeat units are SH-sized; one MH follow-up consumes multiple consecutive units.</div>
     <div class="minis" id="rptMinis"></div>
     <div class="barwrap"><div class="stackbar" id="rptBar"></div></div>
@@ -107,21 +116,27 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
     <table id="subTable" style="margin-top:14px"></table>
   </div>
 
+  <div class="card" id="hourCard" style="display:none">
+    <h2>Hour by hour <span class="muted" id="hourScope" style="font-size:12px;font-weight:400"></span></h2>
+    <div class="note">Where the day actually went — roster units, bookings and outcomes per hour (IST). Appt counts are SH + MH combined; MH shown in brackets.</div>
+    <table id="hourTable"></table>
+  </div>
+
   <div class="card">
     <h2>Day by day</h2>
-    <div class="note">Slot units offered and booked per day (from the roster grid).</div>
+    <div class="note">Slot units offered and booked per day — click a row to drill into that day.</div>
     <table id="dayTable"></table>
   </div>
 
   <div class="card insights">
-    <h2>What this week says</h2>
+    <h2 id="insTitle">What this week says</h2>
     <ul id="insights"></ul>
   </div>
 
   <footer>
     Data: allo_prod · roster_slots (corrected dedup) + appointments + consultation_type_configs.
-    Refresh: <code>python3 fetch_weekly_data.py [provider_id] [week_start]</code>. Currently a single-doctor,
-    single-week view; week-on-week comparison comes next.
+    Refresh: <code>python3 fetch_weekly_data.py [provider_id] [week_start]</code>. Single-doctor,
+    single-week view with day-level drill-down; week-on-week comparison comes next.
   </footer>
 </div>
 
@@ -131,6 +146,7 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
   const D = window.WEEKLY_DATA;
   if (!D){ document.body.innerHTML = '<p style="padding:40px">No data — run fetch_weekly_data.py</p>'; return; }
   const fmtD = s => new Date(s+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+  const wd = s => new Date(s+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short'});
   document.getElementById('who').textContent =
     `${D.doctor} · ${D.locations.join(' + ')} · Week ${fmtD(D.week_start)} – ${fmtD(D.week_end)}, ${D.week_start.slice(0,4)} · refreshed ${D.updated}`;
 
@@ -151,42 +167,49 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
     `one MH follow-up (${fuMH}m) consumes <b>${Math.round(fuMH/fuSH)} repeat units</b>. ` +
     `Capacity is one shared pool per type — the SH/MH split below shows how it was consumed.`;
 
-  // ---- helpers ----
+  // ---- scope ----
+  const days = [];
+  for (let i=0;i<7;i++){
+    const d = new Date(D.week_start+'T00:00:00'); d.setDate(d.getDate()+i);
+    days.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+  }
+  const hasRoster = dt => D.slots.some(s=>s.dt===dt);
+  let scope = null; // null = full week, else 'YYYY-MM-DD'
+
   const isMH = p => p === 'mental_health';
   const REPEAT = new Set(['FU','RR','PQ']);
   const pct = (n,d) => d>0 ? (100*n/d) : null;
   const fp = v => v==null?'–':v.toFixed(1)+'%';
   const hrs = m => (m/60).toFixed(1)+'h';
+  const inScope = r => scope==null || r.dt===scope;
+  const scopeLabel = () => scope==null ? 'full week' : `${wd(scope)} ${fmtD(scope)}`;
 
+  function blankG(){ return {comp:0,compMin:0,ns:0,nsMin:0,resch:0,reschMin:0,canc:0,sched:0}; }
   function collect(types){
     const g = { SH:blankG(), MH:blankG() };
     D.appts.forEach(a=>{
-      if (!types.has(a.type)) return;
+      if (!types.has(a.type) || !inScope(a)) return;
       const b = g[isMH(a.program)?'MH':'SH'];
-      const st = a.status;
-      if (st==='COMPLETED'){ b.comp+=a.n; b.compMin+=a.mins; }
-      else if (st==='MISSED'){ b.ns+=a.n; b.nsMin+=a.mins; }
-      else if (st==='RESCHEDULED'){ b.resch+=a.n; b.reschMin+=a.mins; }
-      else if (st==='CANCELLED'){ b.canc+=a.n; }
-      else if (st==='SCHEDULED'){ b.sched+=a.n; }
+      if (a.status==='COMPLETED'){ b.comp+=a.n; b.compMin+=a.mins; }
+      else if (a.status==='MISSED'){ b.ns+=a.n; b.nsMin+=a.mins; }
+      else if (a.status==='RESCHEDULED'){ b.resch+=a.n; b.reschMin+=a.mins; }
+      else if (a.status==='CANCELLED'){ b.canc+=a.n; }
+      else if (a.status==='SCHEDULED'){ b.sched+=a.n; }
     });
     return g;
   }
-  function blankG(){ return {comp:0,compMin:0,ns:0,nsMin:0,resch:0,reschMin:0,canc:0,sched:0}; }
-
   function slotTotals(typ){
     let units=0, mins=0, bookedUnits=0;
-    D.slots.forEach(s=>{ if(s.typ===typ){ units+=s.slots; mins+=s.slots*s.dur; bookedUnits+=s.booked; } });
+    D.slots.forEach(s=>{ if(s.typ===typ && inScope(s)){ units+=s.slots; mins+=s.slots*s.dur; bookedUnits+=s.booked; } });
     return {units, mins, bookedUnits};
   }
 
-  function section(prefix, types, typKey, unitMins, mhMins){
+  function section(prefix, types, typKey, unitMins){
     const g = collect(types);
     const cap = slotTotals(typKey);
     const grossMin = g.SH.compMin+g.SH.nsMin+g.MH.compMin+g.MH.nsMin;
     const netMin = g.SH.compMin+g.MH.compMin;
-
-    // minis
+    document.getElementById(prefix+'Scope').textContent = '· ' + scopeLabel();
     document.getElementById(prefix+'Minis').innerHTML = [
       {l:'Units offered', v:cap.units, s:hrs(cap.mins)+' · '+unitMins+'m units'},
       {l:'Gross utilization', v:fp(pct(grossMin,cap.mins)), s:hrs(grossMin)+' used'},
@@ -196,7 +219,6 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
       {l:'Rescheduled', v:g.SH.resch+g.MH.resch, s:`SH ${g.SH.resch} · MH ${g.MH.resch}`},
     ].map(m=>`<div class="mini"><div class="l">${m.l}</div><div class="v">${m.v}</div><div class="s">${m.s}</div></div>`).join('');
 
-    // stacked consumption bar (minutes of capacity)
     const idle = Math.max(0, cap.mins - grossMin);
     const segs = [
       {v:g.SH.compMin, c:'var(--sh)', n:'SH completed'},
@@ -210,14 +232,13 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
     document.getElementById(prefix+'Legend').innerHTML =
       segs.map(s=>`<span class="key"><span class="sw" style="background:${s.c==='transparent'?'var(--track)':s.c}"></span>${s.n} · ${Math.round(s.v)}m (${fp(pct(s.v,cap.mins))})</span>`).join('');
 
-    // program table
     const row = (name, b, cls) => {
       const booked = b.comp+b.ns+b.resch+b.canc+b.sched;
       const gm = b.compMin+b.nsMin;
       return `<tr class="${cls||''}">
         <td>${name}</td>
         <td>${booked}</td><td>${b.comp}</td><td>${b.ns}</td><td>${b.resch}</td><td>${b.canc}</td>
-        <td>${b.compMin+b.nsMin ? Math.round(gm/unitMins*10)/10 : 0}</td>
+        <td>${gm ? Math.round(gm/unitMins*10)/10 : 0}</td>
         <td>${Math.round(gm)}m</td><td>${Math.round(b.compMin)}m</td>
         <td>${fp(pct(gm,cap.mins))}</td><td>${fp(pct(b.compMin,cap.mins))}</td>
         <td>${fp(pct(gm,grossMin))}</td>
@@ -236,63 +257,134 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
     return {g, cap, grossMin, netMin};
   }
 
-  const sc = section('sc', new Set(['SC']), 'SC', scSH, scMH);
-  const rpt = section('rpt', REPEAT, 'RPT', fuSH, fuMH);
-
-  // repeat subtype mini-table
-  const subAgg = {};
-  D.appts.forEach(a=>{
-    if (!REPEAT.has(a.type)) return;
-    const k = a.type + '|' + (isMH(a.program)?'MH':'SH');
-    const o = subAgg[k] = subAgg[k] || {comp:0,ns:0,resch:0};
-    if (a.status==='COMPLETED') o.comp+=a.n;
-    else if (a.status==='MISSED') o.ns+=a.n;
-    else if (a.status==='RESCHEDULED') o.resch+=a.n;
-  });
-  const subKeys = Object.keys(subAgg).sort();
-  document.getElementById('subTable').innerHTML = `
-    <thead><tr><th>Repeat subtype</th><th>Completed</th><th>No-show</th><th>Resched</th></tr></thead>
-    <tbody>${subKeys.map(k=>{
-      const [t,p]=k.split('|'), o=subAgg[k];
-      const nm = {FU:'Follow Up',RR:'Report Reading',PQ:'Patient Queries'}[t];
-      return `<tr><td>${nm} · ${p}</td><td>${o.comp}</td><td>${o.ns}</td><td>${o.resch}</td></tr>`;
-    }).join('')}</tbody>`;
-
-  // day-by-day
-  const days = [];
-  for (let i=0;i<7;i++){
-    const d = new Date(D.week_start+'T00:00:00'); d.setDate(d.getDate()+i);
-    days.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+  function renderSub(){
+    const subAgg = {};
+    D.appts.forEach(a=>{
+      if (!REPEAT.has(a.type) || !inScope(a)) return;
+      const k = a.type + '|' + (isMH(a.program)?'MH':'SH');
+      const o = subAgg[k] = subAgg[k] || {comp:0,ns:0,resch:0};
+      if (a.status==='COMPLETED') o.comp+=a.n;
+      else if (a.status==='MISSED') o.ns+=a.n;
+      else if (a.status==='RESCHEDULED') o.resch+=a.n;
+    });
+    const subKeys = Object.keys(subAgg).sort();
+    document.getElementById('subTable').innerHTML = subKeys.length ? `
+      <thead><tr><th>Repeat subtype</th><th>Completed</th><th>No-show</th><th>Resched</th></tr></thead>
+      <tbody>${subKeys.map(k=>{
+        const [t,p]=k.split('|'), o=subAgg[k];
+        const nm = {FU:'Follow Up',RR:'Report Reading',PQ:'Patient Queries'}[t];
+        return `<tr><td>${nm} · ${p}</td><td>${o.comp}</td><td>${o.ns}</td><td>${o.resch}</td></tr>`;
+      }).join('')}</tbody>` : '';
   }
-  const byDay = {};
-  D.slots.forEach(s=>{ const o = byDay[s.dt] = byDay[s.dt] || {sc:0,scB:0,rp:0,rpB:0};
-    if (s.typ==='SC'){ o.sc+=s.slots; o.scB+=s.booked; } else { o.rp+=s.slots; o.rpB+=s.booked; } });
-  const wd = s => new Date(s+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short'});
-  document.getElementById('dayTable').innerHTML = `
-    <thead><tr><th>Day</th><th>SC units</th><th>SC booked</th><th>SC booked %</th>
-    <th>Repeat units</th><th>Repeat booked</th><th>Repeat booked %</th></tr></thead>
-    <tbody>${days.map(dt=>{
-      const o = byDay[dt];
-      if (!o) return `<tr><td>${wd(dt)} ${fmtD(dt)}</td><td colspan="6" class="muted">no roster — day off</td></tr>`;
-      return `<tr><td>${wd(dt)} ${fmtD(dt)}</td><td>${o.sc}</td><td>${o.scB}</td><td>${fp(pct(o.scB,o.sc))}</td>
-        <td>${o.rp}</td><td>${o.rpB}</td><td>${fp(pct(o.rpB,o.rp))}</td></tr>`;
-    }).join('')}</tbody>`;
 
-  // insights
-  const ins = [];
-  const mhShare = pct(sc.g.MH.compMin+sc.g.MH.nsMin, sc.grossMin);
-  const mhBookShare = pct(sc.g.MH.comp+sc.g.MH.ns+sc.g.MH.resch,
-    sc.g.MH.comp+sc.g.MH.ns+sc.g.MH.resch+sc.g.SH.comp+sc.g.SH.ns+sc.g.SH.resch);
-  ins.push(`<li><b>${fp(mhShare)} of her utilized SC time went to Mental Health</b> from only ${fp(mhBookShare)} of SC bookings — each MH screening (${scMH}m) costs ${Math.round(scMH/scSH)}× an SH screening, so MH demand is the main consumer of her screening capacity.</li>`);
-  const scResch = sc.g.SH.resch + sc.g.MH.resch, scBookedAll = scResch + sc.g.SH.comp+sc.g.MH.comp+sc.g.SH.ns+sc.g.MH.ns;
-  ins.push(`<li><b>${scResch} of ${scBookedAll} SC bookings (${fp(pct(scResch,scBookedAll))}) were rescheduled away</b> — time that was blocked on the calendar but produced nothing. Add the no-shows and only ${fp(pct(sc.netMin,sc.cap.mins))} of SC capacity ended in a completed consult.</li>`);
-  const nsMH = pct(sc.g.MH.ns, sc.g.MH.comp+sc.g.MH.ns), nsSH = pct(sc.g.SH.ns, sc.g.SH.comp+sc.g.SH.ns);
-  ins.push(`<li>No-show rate on held SC calls: <b>MH ${fp(nsMH)} vs SH ${fp(nsSH)}</b>${(nsMH||0)>(nsSH||0)?' — MH patients no-show more, and each MH no-show wastes '+scMH+' minutes, not '+scSH+'.':'.'}</li>`);
-  const offDays = days.filter(d=>!byDay[d]).map(wd);
-  if (offDays.length) ins.push(`<li>No roster on <b>${offDays.join(', ')}</b>.</li>`);
-  const idleShare = pct(Math.max(0, sc.cap.mins - sc.grossMin), sc.cap.mins);
-  ins.push(`<li><b>${fp(idleShare)} of SC capacity sat idle or was released</b> (${hrs(Math.max(0,sc.cap.mins-sc.grossMin))}). Repeat capacity idle: ${fp(pct(Math.max(0,rpt.cap.mins-rpt.grossMin),rpt.cap.mins))}.</li>`);
-  document.getElementById('insights').innerHTML = ins.join('');
+  function renderHours(){
+    const card = document.getElementById('hourCard');
+    if (scope==null){ card.style.display='none'; return; }
+    card.style.display='';
+    document.getElementById('hourScope').textContent = '· ' + scopeLabel();
+    const hoursSet = new Set();
+    D.slots.forEach(s=>{ if(s.dt===scope) hoursSet.add(s.hr); });
+    D.appts.forEach(a=>{ if(a.dt===scope) hoursSet.add(a.hr); });
+    const hours = [...hoursSet].sort((a,b)=>a-b);
+    const rows = hours.map(h=>{
+      const sc = {u:0,b:0}, rp = {u:0,b:0};
+      D.slots.forEach(s=>{ if(s.dt===scope && s.hr===h){ const o = s.typ==='SC'?sc:rp; o.u+=s.slots; o.b+=s.booked; } });
+      const oc = {SC:{comp:0,compM:0,ns:0,nsM:0,resch:0,reschM:0}, RPT:{comp:0,compM:0,ns:0,nsM:0,resch:0,reschM:0}};
+      D.appts.forEach(a=>{
+        if (a.dt!==scope || a.hr!==h) return;
+        const o = oc[a.type==='SC'?'SC':'RPT'];
+        const mh = isMH(a.program) ? a.n : 0;
+        if (a.status==='COMPLETED'){ o.comp+=a.n; o.compM+=mh; }
+        else if (a.status==='MISSED'){ o.ns+=a.n; o.nsM+=mh; }
+        else if (a.status==='RESCHEDULED'){ o.resch+=a.n; o.reschM+=mh; }
+      });
+      const f = (n,m) => n ? (m ? `${n} <span class="muted">(${m} MH)</span>` : String(n)) : '<span class="muted">–</span>';
+      const idleU = sc.u - sc.b;
+      return `<tr>
+        <td>${String(h).padStart(2,'0')}:00–${String(h+1).padStart(2,'0')}:00</td>
+        <td>${sc.u||'<span class="muted">–</span>'}</td><td>${sc.b||'<span class="muted">–</span>'}</td>
+        <td>${f(oc.SC.comp,oc.SC.compM)}</td><td>${f(oc.SC.ns,oc.SC.nsM)}</td><td>${f(oc.SC.resch,oc.SC.reschM)}</td>
+        <td>${sc.u? (idleU>0?idleU:'0') : '<span class="muted">–</span>'}</td>
+        <td>${rp.u||'<span class="muted">–</span>'}</td><td>${rp.b||'<span class="muted">–</span>'}</td>
+        <td>${f(oc.RPT.comp,oc.RPT.compM)}</td><td>${f(oc.RPT.ns,oc.RPT.nsM)}</td><td>${f(oc.RPT.resch,oc.RPT.reschM)}</td>
+      </tr>`;
+    }).join('');
+    document.getElementById('hourTable').innerHTML = `
+      <thead><tr><th>Hour (IST)</th><th>SC units</th><th>SC booked</th><th>SC done</th><th>SC no-show</th><th>SC resched</th><th>SC open units</th>
+      <th>Rpt units</th><th>Rpt booked</th><th>Rpt done</th><th>Rpt no-show</th><th>Rpt resched</th></tr></thead>
+      <tbody>${rows}</tbody>`;
+  }
+
+  function renderDays(){
+    const byDay = {};
+    D.slots.forEach(s=>{ const o = byDay[s.dt] = byDay[s.dt] || {sc:0,scB:0,rp:0,rpB:0};
+      if (s.typ==='SC'){ o.sc+=s.slots; o.scB+=s.booked; } else { o.rp+=s.slots; o.rpB+=s.booked; } });
+    document.getElementById('dayTable').innerHTML = `
+      <thead><tr><th>Day</th><th>SC units</th><th>SC booked</th><th>SC booked %</th>
+      <th>Repeat units</th><th>Repeat booked</th><th>Repeat booked %</th></tr></thead>
+      <tbody>${days.map(dt=>{
+        const o = byDay[dt], sel = scope===dt ? 'sel' : '';
+        if (!o) return `<tr class="${sel}"><td>${wd(dt)} ${fmtD(dt)}</td><td colspan="6" class="muted">no roster — day off</td></tr>`;
+        return `<tr class="pick ${sel}" data-dt="${dt}"><td>${wd(dt)} ${fmtD(dt)}</td><td>${o.sc}</td><td>${o.scB}</td><td>${fp(pct(o.scB,o.sc))}</td>
+          <td>${o.rp}</td><td>${o.rpB}</td><td>${fp(pct(o.rpB,o.rp))}</td></tr>`;
+      }).join('')}</tbody>`;
+    document.querySelectorAll('#dayTable tr.pick').forEach(tr=>tr.addEventListener('click',()=>{
+      setScope(scope===tr.dataset.dt ? null : tr.dataset.dt);
+    }));
+  }
+
+  function renderInsights(sc, rpt){
+    const ins = [];
+    const here = scope==null ? 'this week' : 'on ' + scopeLabel();
+    const mhShare = pct(sc.g.MH.compMin+sc.g.MH.nsMin, sc.grossMin);
+    const mhBookShare = pct(sc.g.MH.comp+sc.g.MH.ns+sc.g.MH.resch,
+      sc.g.MH.comp+sc.g.MH.ns+sc.g.MH.resch+sc.g.SH.comp+sc.g.SH.ns+sc.g.SH.resch);
+    if (mhShare!=null)
+      ins.push(`<li><b>${fp(mhShare)} of utilized SC time went to Mental Health</b> from ${fp(mhBookShare)} of SC bookings ${here} — each MH screening (${scMH}m) costs ${Math.round(scMH/scSH)}× an SH screening.</li>`);
+    const scResch = sc.g.SH.resch + sc.g.MH.resch;
+    const scHeld = sc.g.SH.comp+sc.g.MH.comp+sc.g.SH.ns+sc.g.MH.ns;
+    if (scResch+scHeld > 0)
+      ins.push(`<li><b>${scResch} of ${scResch+scHeld} SC bookings (${fp(pct(scResch,scResch+scHeld))}) were rescheduled away</b> ${here}; only ${fp(pct(sc.netMin,sc.cap.mins))} of SC capacity ended in a completed consult.</li>`);
+    const nsMH = pct(sc.g.MH.ns, sc.g.MH.comp+sc.g.MH.ns), nsSH = pct(sc.g.SH.ns, sc.g.SH.comp+sc.g.SH.ns);
+    if (nsMH!=null || nsSH!=null)
+      ins.push(`<li>No-show rate on held SC calls: <b>MH ${fp(nsMH)} vs SH ${fp(nsSH)}</b>${(nsMH||0)>(nsSH||0)?' — and each MH no-show wastes '+scMH+' minutes, not '+scSH+'.':'.'}</li>`);
+    if (scope==null){
+      const offDays = days.filter(d=>!hasRoster(d)).map(wd);
+      if (offDays.length) ins.push(`<li>No roster on <b>${offDays.join(', ')}</b>.</li>`);
+    }
+    if (sc.cap.mins>0)
+      ins.push(`<li><b>${fp(pct(Math.max(0,sc.cap.mins-sc.grossMin),sc.cap.mins))} of SC capacity sat idle or was released</b> (${hrs(Math.max(0,sc.cap.mins-sc.grossMin))}). Repeat capacity idle: ${fp(pct(Math.max(0,rpt.cap.mins-rpt.grossMin),rpt.cap.mins))}.</li>`);
+    if (scope!=null)
+      ins.push(`<li>Use the hour-by-hour table above to see exactly which hours drove this — open units are supply nobody booked; reschedules are demand that slipped away.</li>`);
+    document.getElementById('insTitle').textContent = scope==null ? 'What this week says' : `What ${scopeLabel()} says`;
+    document.getElementById('insights').innerHTML = ins.join('');
+  }
+
+  // ---- scope pills ----
+  const pillBox = document.getElementById('scopePills');
+  function renderPills(){
+    pillBox.innerHTML = [`<button data-s="" class="${scope==null?'on':''}">Full week</button>`]
+      .concat(days.map(dt=>{
+        const dis = hasRoster(dt) ? '' : 'disabled title="no roster"';
+        return `<button data-s="${dt}" ${dis} class="${scope===dt?'on':''}">${wd(dt)} ${fmtD(dt)}</button>`;
+      })).join('');
+    pillBox.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+      if (b.disabled) return;
+      setScope(b.dataset.s || null);
+    }));
+  }
+  function setScope(s){ scope = s; renderAll(); }
+
+  function renderAll(){
+    renderPills();
+    const sc = section('sc', new Set(['SC']), 'SC', scSH);
+    const rpt = section('rpt', REPEAT, 'RPT', fuSH);
+    renderSub();
+    renderHours();
+    renderDays();
+    renderInsights(sc, rpt);
+  }
+  renderAll();
 })();
 </script>
 </body>
