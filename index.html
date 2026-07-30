@@ -30,7 +30,7 @@ body {
   margin:0; background:var(--page); color:var(--ink-1);
   font-family:system-ui,-apple-system,"Segoe UI",sans-serif; font-size:14px;
 }
-.wrap { max-width:1280px; margin:0 auto; padding:20px 24px 60px; }
+.wrap { max-width:1360px; margin:0 auto; padding:20px 24px 60px; }
 header h1 { font-size:20px; margin:0 0 2px; }
 header .sub { color:var(--ink-3); font-size:12px; }
 .defn { color:var(--ink-2); font-size:12px; margin-top:6px; max-width:900px; line-height:1.5; }
@@ -63,11 +63,11 @@ select, input[type=search] {
 }
 .pills button.on { background:var(--surface-1); color:var(--ink-1); font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.12); }
 
-.kpis { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:10px; margin-bottom:16px; }
-@media (max-width:980px){ .kpis { grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); } }
+.kpis { display:grid; grid-template-columns:repeat(9,minmax(0,1fr)); gap:8px; margin-bottom:16px; }
+@media (max-width:1100px){ .kpis { grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); } }
 .kpi { background:var(--surface-1); border:1px solid var(--border); border-radius:10px; padding:12px 12px; }
 .kpi .lbl { font-size:11px; color:var(--ink-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.kpi .val { font-size:22px; font-weight:650; margin-top:2px; }
+.kpi .val { font-size:20px; font-weight:650; margin-top:2px; }
 .kpi .delta { font-size:12px; margin-top:2px; color:var(--ink-3); }
 .kpi .delta .up { color:var(--good); font-weight:600; }
 .kpi .delta .dn { color:var(--bad); font-weight:600; }
@@ -102,7 +102,7 @@ tbody tr.doc:hover { background:var(--track); cursor:pointer; }
 td.doctor { font-weight:600; max-width:220px; overflow:hidden; text-overflow:ellipsis; }
 td .clin { color:var(--ink-3); font-weight:400; font-size:11px; }
 .pctcell { display:inline-flex; align-items:center; gap:8px; justify-content:flex-end; }
-.bar { width:40px; height:6px; background:var(--track); border-radius:3px; overflow:hidden; }
+.bar { width:36px; height:6px; background:var(--track); border-radius:3px; overflow:hidden; }
 .bar i { display:block; height:100%; border-radius:3px; }
 .muted { color:var(--ink-3); }
 tr.detail td { padding:0; }
@@ -350,6 +350,8 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
       {lbl:'FU net util', v:pct(cur.fun,cur.fu_min), p:pct(prv.fun,prv.fu_min), f:fmtPct1, isPct:true},
       {lbl:'SC time offered', v:cur.sc_min, p:prv.sc_min, f:fmtHrs, isPct:false, dFmt:fmtHrs},
       {lbl:'FU time offered', v:cur.fu_min, p:prv.fu_min, f:fmtHrs, isPct:false, dFmt:fmtHrs},
+      {lbl:'SC slots offered', v:cur.sc_slots, p:prv.sc_slots, f:x=>x.toLocaleString('en-IN'), isPct:false},
+      {lbl:'FU slots offered', v:cur.fu_slots, p:prv.fu_slots, f:x=>x.toLocaleString('en-IN'), isPct:false},
       {lbl:'Doctors active', v:docs, p:prevDocs, f:x=>String(x), isPct:false},
     ];
     document.getElementById('kpis').innerHTML = items.map(it=>`
@@ -429,10 +431,12 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
   const cols = [
     {id:'doctor', name:'Doctor', num:false},
     {id:'sc_hrs', name:'SC offered', num:true, title:'SC slot time available'},
+    {id:'sc_slots', name:'SC slots', num:true},
     {id:'scg', name:'SC gross', num:true},
     {id:'scn', name:'SC net', num:true},
     {id:'trend', name:'Trend', num:false, title:'SC gross utilization by week'},
     {id:'fu_hrs', name:'FU offered', num:true},
+    {id:'fu_slots', name:'FU slots', num:true},
     {id:'fug', name:'FU gross', num:true},
     {id:'fun', name:'FU net', num:true},
     {id:'slot', name:'Avg SC slot', num:true},
@@ -442,7 +446,7 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
   let sortBy = 'sc_hrs', sortDir = -1, expanded = new Set();
 
   function sparkline(vals){
-    const w=70,h=24,p=3;
+    const w=60,h=24,p=3;
     const vs = vals.filter(v=>v!=null);
     if (vs.length<2) return '<span class="muted">–</span>';
     const mx = Math.max(0.5, ...vs), mn = 0;
@@ -471,8 +475,8 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
     });
     return [...map.values()].map(o=>({
       doctor:o.doctor, clinics:[...o.clinics].filter(Boolean).join(', '), city:o.city,
-      sc_hrs:o.a.sc_min, scg:pct(o.a.scg,o.a.sc_min), scn:pct(o.a.scn,o.a.sc_min),
-      fu_hrs:o.a.fu_min, fug:pct(o.a.fug,o.a.fu_min), fun:pct(o.a.fun,o.a.fu_min),
+      sc_hrs:o.a.sc_min, sc_slots:o.a.sc_slots, scg:pct(o.a.scg,o.a.sc_min), scn:pct(o.a.scn,o.a.sc_min),
+      fu_hrs:o.a.fu_min, fu_slots:o.a.fu_slots, fug:pct(o.a.fug,o.a.fu_min), fun:pct(o.a.fun,o.a.fu_min),
       slot:o.a.sc_slots>0?o.a.sc_min/o.a.sc_slots:null,
       fuslot:o.a.fu_slots>0?o.a.fu_min/o.a.fu_slots:null, days:o.a.days.size,
     }));
@@ -512,17 +516,19 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
     document.getElementById('tableScope').textContent = 'Click a row for the doctor’s week-by-week detail. Bars scale 0–100%.';
 
     const body = document.getElementById('docBody');
-    if (!stats.length){ body.innerHTML = '<tr><td colspan="11" class="empty">No doctors match this selection.</td></tr>'; return; }
+    if (!stats.length){ body.innerHTML = '<tr><td colspan="13" class="empty">No doctors match this selection.</td></tr>'; return; }
     body.innerHTML = stats.map(s=>{
       const wkMap = byDocWeek.get(s.doctor) || new Map();
       const spark = sparkline(weeks.map(w=>{ const a=wkMap.get(w.key); return a?pct(a.scg,a.sc_min):null; }));
       const main = `<tr class="doc" data-doc="${encodeURIComponent(s.doctor)}">
         <td class="doctor">${s.doctor}<br><span class="clin">${s.clinics||''}</span></td>
         <td>${s.sc_hrs>0?fmtHrs(s.sc_hrs):'<span class="muted">–</span>'}</td>
+        <td>${s.sc_slots>0?s.sc_slots:'<span class="muted">–</span>'}</td>
         <td>${pctCell(s.scg,'var(--sc)')}</td>
         <td>${pctCell(s.scn,'var(--sc-soft)')}</td>
         <td style="text-align:right">${spark}</td>
         <td>${s.fu_hrs>0?fmtHrs(s.fu_hrs):'<span class="muted">–</span>'}</td>
+        <td>${s.fu_slots>0?s.fu_slots:'<span class="muted">–</span>'}</td>
         <td>${pctCell(s.fug,'var(--fu)')}</td>
         <td>${pctCell(s.fun,'var(--fu-soft)')}</td>
         <td>${s.slot!=null?s.slot.toFixed(1)+'m':'<span class="muted">–</span>'}</td>
@@ -538,7 +544,7 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
           <td>${fmtHrs(a.fu_min)}</td><td>${fmtPct1(pct(a.fug,a.fu_min))}</td><td>${fmtPct1(pct(a.fun,a.fu_min))}</td>
           <td>${a.fun_slots} / ${a.fu_slots}</td><td>${a.days.size}</td></tr>`;
       }).join('');
-      return main + `<tr class="detail"><td colspan="11"><div class="inner"><table>
+      return main + `<tr class="detail"><td colspan="13"><div class="inner"><table>
         <thead><tr><th style="text-align:left">Week</th><th>SC offered</th><th>SC gross</th><th>SC net</th><th>SC done/slots</th>
         <th>FU offered</th><th>FU gross</th><th>FU net</th><th>FU done/slots</th><th>Days</th></tr></thead>
         <tbody>${det}</tbody></table></div></td></tr>`;
@@ -656,6 +662,8 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
   // "capable" offered hours: dual (Both) time is bookable either way, so it counts on both sides
   const offCap = a => a.off + a.both;
   const onCap  = a => a.on + a.both;
+  const offCapSlots = a => a.off_slots + a.both_slots;
+  const onCapSlots  = a => a.on_slots + a.both_slots;
   const agg = rs => { const a=blank(); rs.forEach(r=>acc(a,r)); return a; };
   const pct = (n,d) => d>0 ? n/d : null;
   const fmtPct = v => v==null ? '–' : (v*100).toFixed(0)+'%';
@@ -679,11 +687,13 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
     if (loc !== 'Online') items.push(
       {lbl:'Offline gross util', v:pct(cur.off_g,offCap(cur)), p:pct(prv.off_g,offCap(prv)), f:fmtPct1, isPct:true},
       {lbl:'Offline net util', v:pct(cur.off_n,offCap(cur)), p:pct(prv.off_n,offCap(prv)), f:fmtPct1, isPct:true},
-      {lbl:'Offline hrs offered', v:offCap(cur), p:offCap(prv), f:fmtHrs, dFmt:fmtHrs});
+      {lbl:'Offline hrs offered', v:offCap(cur), p:offCap(prv), f:fmtHrs, dFmt:fmtHrs},
+      {lbl:'Offline slots offered', v:offCapSlots(cur), p:offCapSlots(prv), f:x=>x.toLocaleString('en-IN')});
     if (loc !== 'Offline') items.push(
       {lbl:'Online gross util', v:pct(cur.on_g,onCap(cur)), p:pct(prv.on_g,onCap(prv)), f:fmtPct1, isPct:true},
       {lbl:'Online net util', v:pct(cur.on_n,onCap(cur)), p:pct(prv.on_n,onCap(prv)), f:fmtPct1, isPct:true},
-      {lbl:'Online hrs offered', v:onCap(cur), p:onCap(prv), f:fmtHrs, dFmt:fmtHrs});
+      {lbl:'Online hrs offered', v:onCap(cur), p:onCap(prv), f:fmtHrs, dFmt:fmtHrs},
+      {lbl:'Online slots offered', v:onCapSlots(cur), p:onCapSlots(prv), f:x=>x.toLocaleString('en-IN')});
     items.push({lbl:'Therapists active', v:act, p:pact, f:x=>String(x)});
     document.getElementById('tKpis').innerHTML = items.map(it=>`
       <div class="kpi">
@@ -762,9 +772,11 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
   const cols = [
     {id:'therapist', name:'Therapist'},
     {id:'off_hrs', name:'Offline offered'},
+    {id:'off_slots', name:'Offline slots'},
     {id:'offg', name:'Offline gross'},
     {id:'offn', name:'Offline net'},
     {id:'on_hrs', name:'Online offered'},
+    {id:'on_slots', name:'Online slots'},
     {id:'ong', name:'Online gross'},
     {id:'onn', name:'Online net'},
     {id:'trend', name:'Gross trend'},
@@ -773,7 +785,7 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
   let sortBy = 'on_hrs', sortDir = -1, expanded = new Set();
 
   function sparkline(vals){
-    const w=70,h=24,p=3;
+    const w=60,h=24,p=3;
     const vs = vals.filter(v=>v!=null);
     if (vs.length<2) return '<span class="muted">–</span>';
     const mx = Math.max(0.5, ...vs);
@@ -811,8 +823,8 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
     });
     const stats = [...map.values()].map(o=>({
       therapist:o.therapist, program:o.program,
-      off_hrs:offCap(o.a), offg:pct(o.a.off_g,offCap(o.a)), offn:pct(o.a.off_n,offCap(o.a)),
-      on_hrs:onCap(o.a), ong:pct(o.a.on_g,onCap(o.a)), onn:pct(o.a.on_n,onCap(o.a)),
+      off_hrs:offCap(o.a), off_slots:offCapSlots(o.a), offg:pct(o.a.off_g,offCap(o.a)), offn:pct(o.a.off_n,offCap(o.a)),
+      on_hrs:onCap(o.a), on_slots:onCapSlots(o.a), ong:pct(o.a.on_g,onCap(o.a)), onn:pct(o.a.on_n,onCap(o.a)),
       days:o.a.days.size,
     }));
     stats.sort((a,b)=>{
@@ -832,7 +844,7 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
     document.getElementById('tCount').textContent = stats.length + (stats.length===1?' therapist':' therapists') +
       ' · ' + period.name + ` (${fmtD(period.start)} – ${fmtD(period.end)})` + (period.note?` · ${period.note}`:'');
 
-    if (!stats.length){ body.innerHTML = '<tr><td colspan="9" class="empty">No therapists match this selection.</td></tr>'; return; }
+    if (!stats.length){ body.innerHTML = '<tr><td colspan="11" class="empty">No therapists match this selection.</td></tr>'; return; }
     body.innerHTML = stats.map(s=>{
       const wkMap = byTherWeek.get(s.therapist) || new Map();
       const spark = sparkline(weeks.map(w=>{ const a=wkMap.get(w.key); if(!a) return null;
@@ -840,9 +852,11 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
       const main = `<tr class="doc" data-doc="${encodeURIComponent(s.therapist)}">
         <td class="doctor">${s.therapist} <span class="prog">${s.program}</span></td>
         <td>${s.off_hrs>0?fmtHrs(s.off_hrs):'<span class="muted">–</span>'}</td>
+        <td>${s.off_slots>0?s.off_slots:'<span class="muted">–</span>'}</td>
         <td>${pctCell(s.offg,'var(--sc)')}</td>
         <td>${pctCell(s.offn,'var(--sc-soft)')}</td>
         <td>${s.on_hrs>0?fmtHrs(s.on_hrs):'<span class="muted">–</span>'}</td>
+        <td>${s.on_slots>0?s.on_slots:'<span class="muted">–</span>'}</td>
         <td>${pctCell(s.ong,'var(--fu)')}</td>
         <td>${pctCell(s.onn,'var(--fu-soft)')}</td>
         <td style="text-align:right">${spark}</td>
@@ -856,7 +870,7 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
           <td>${fmtHrs(onCap(a))}</td><td>${fmtPct1(pct(a.on_g,onCap(a)))}</td><td>${fmtPct1(pct(a.on_n,onCap(a)))}</td>
           <td>${a.off_ns+a.on_ns} / ${a.off_slots+a.on_slots+a.both_slots}</td><td>${a.days.size}</td></tr>`;
       }).join('');
-      return main + `<tr class="detail"><td colspan="9"><div class="inner"><table>
+      return main + `<tr class="detail"><td colspan="11"><div class="inner"><table>
         <thead><tr><th style="text-align:left">Week</th><th>Offline offered</th><th>Offline gross</th><th>Offline net</th>
         <th>Online offered</th><th>Online gross</th><th>Online net</th><th>Done/slots</th><th>Days</th></tr></thead>
         <tbody>${det}</tbody></table></div></td></tr>`;
