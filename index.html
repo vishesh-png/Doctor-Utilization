@@ -206,7 +206,7 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
 
     <div class="card">
       <h2>Therapists</h2>
-      <div class="note">Click a row for the therapist’s week-by-week detail. Program = SH/MH from the program tag on their therapy bookings. Bars scale 0–100%.</div>
+      <div class="note">Click a row for the therapist’s week-by-week detail. Program = SH/MH from the program tag on their therapy bookings. Offered hours follow the block’s location (a dual offline+online block counts as Offline); gross/net utilization follows the mode of the actual session (video/phone = Online). Bars scale 0–100%.</div>
       <div class="count" id="tCount"></div>
       <div style="overflow-x:auto">
         <table id="tTable">
@@ -221,7 +221,10 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
     Bookings cancelled or rescheduled before the slot start are not counted as utilized. Dual online+offline windows are counted
     once, under Offline. Utilization of ~35% gross / ~23% net on SC is the verified network-wide level — cells are shaded relative
     to the network median, not an absolute target. Therapist tab: TH (Therapy) slots only; a therapist's program (SH/MH) is derived
-    from the program tag on their bookings, since capacity carries no program. Data: allo_prod · roster_slots (corrected dedup query).
+    from the program tag on their bookings, since capacity carries no program. Therapist offered hours follow the block's
+    location (dual offline+online blocks count as Offline) while utilization follows the session's actual mode — so a dual
+    block used for video sessions shows Online utilization, and Online utilization can occasionally exceed 100% of
+    online-only offered hours. Data: allo_prod · roster_slots (corrected dedup query).
     Refresh: <code>python3 fetch_data.py</code> and <code>python3 fetch_therapist_data.py</code>.
   </footer>
 </div>
@@ -640,11 +643,12 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
   function blank(){ return {off:0, off_g:0, off_n:0, on:0, on_g:0, on_n:0,
                             off_slots:0, on_slots:0, off_ns:0, on_ns:0, days:new Set()}; }
   function acc(a,r){
-    const off = r[C.channel]==='Offline';
-    if (off){ a.off += r[C.mins]||0; a.off_g += r[C.gross_min]||0; a.off_n += r[C.net_min]||0;
-              a.off_slots += r[C.slots]||0; a.off_ns += r[C.net_slots]||0; }
-    else    { a.on += r[C.mins]||0; a.on_g += r[C.gross_min]||0; a.on_n += r[C.net_min]||0;
-              a.on_slots += r[C.slots]||0; a.on_ns += r[C.net_slots]||0; }
+    // capacity follows the slot's channel (dual offline+online blocks sit under Offline)
+    if (r[C.channel]==='Offline'){ a.off += r[C.mins]||0; a.off_slots += r[C.slots]||0; }
+    else                         { a.on += r[C.mins]||0; a.on_slots += r[C.slots]||0; }
+    // utilization follows the MODE of the appointment that consumed the slot
+    a.off_g += r[C.g_off_min]||0; a.off_n += r[C.n_off_min]||0; a.off_ns += r[C.n_off_slots]||0;
+    a.on_g  += r[C.g_on_min]||0;  a.on_n  += r[C.n_on_min]||0;  a.on_ns  += r[C.n_on_slots]||0;
     if ((r[C.mins]||0) > 0) a.days.add(r[C.dt]);
   }
   const agg = rs => { const a=blank(); rs.forEach(r=>acc(a,r)); return a; };

@@ -57,6 +57,7 @@ slot_data AS (
 appointment_data AS (
   SELECT app.id AS appt_id, app.provider_id,
          DATEADD(minute,330,app.start_time) AS appt_start_ts,
+         CASE WHEN app.mode='offline' THEN 'Offline' ELSE 'Online' END AS appt_channel,
          CASE WHEN app.status='COMPLETED' THEN 'COMPLETED'
               WHEN app.updated_at > app.start_time THEN 'No Show' ELSE NULL END AS appt_final_status
   FROM allo_consultations.appointments app
@@ -67,7 +68,7 @@ appointment_data AS (
 sad AS (
   SELECT s.provider_id, s.slot_dt, s.therapist, s.channel,
          s.slot_start_ts, s.slot_duration,
-         a.appt_id, a.appt_final_status,
+         a.appt_id, a.appt_final_status, a.appt_channel,
          ROW_NUMBER() OVER (PARTITION BY a.appt_id
                             ORDER BY DATEDIFF(minute,s.slot_start_ts,a.appt_start_ts) ASC,
                                      s.slot_start_ts) AS rn
@@ -78,16 +79,22 @@ sad AS (
    AND a.appt_start_ts >= s.slot_start_ts AND a.appt_start_ts < s.slot_end_ts),
 ss AS (
   SELECT provider_id, slot_dt, therapist, channel, slot_start_ts, slot_duration,
-         SUM(CASE WHEN rn=1 AND appt_final_status='COMPLETED' THEN 1 ELSE 0 END) AS nc,
-         SUM(CASE WHEN rn=1 AND appt_final_status='No Show' THEN 1 ELSE 0 END) AS nns
+         SUM(CASE WHEN rn=1 AND appt_final_status='COMPLETED' AND appt_channel='Offline' THEN 1 ELSE 0 END) AS nc_off,
+         SUM(CASE WHEN rn=1 AND appt_final_status='No Show' AND appt_channel='Offline' THEN 1 ELSE 0 END) AS nns_off,
+         SUM(CASE WHEN rn=1 AND appt_final_status='COMPLETED' AND appt_channel='Online' THEN 1 ELSE 0 END) AS nc_on,
+         SUM(CASE WHEN rn=1 AND appt_final_status='No Show' AND appt_channel='Online' THEN 1 ELSE 0 END) AS nns_on
   FROM sad GROUP BY 1,2,3,4,5,6)
 SELECT slot_dt AS dt, therapist, channel,
   COUNT(*) AS slots,
   SUM(slot_duration) AS mins,
-  SUM(CASE WHEN (nc+nns)>0 THEN 1 ELSE 0 END) AS gross_slots,
-  SUM(CASE WHEN (nc+nns)>0 THEN slot_duration ELSE 0 END) AS gross_min,
-  SUM(CASE WHEN nc>0 THEN 1 ELSE 0 END) AS net_slots,
-  SUM(CASE WHEN nc>0 THEN slot_duration ELSE 0 END) AS net_min
+  SUM(CASE WHEN (nc_off+nns_off)>0 THEN 1 ELSE 0 END) AS g_off_slots,
+  SUM(CASE WHEN (nc_off+nns_off)>0 THEN slot_duration ELSE 0 END) AS g_off_min,
+  SUM(CASE WHEN nc_off>0 THEN 1 ELSE 0 END) AS n_off_slots,
+  SUM(CASE WHEN nc_off>0 THEN slot_duration ELSE 0 END) AS n_off_min,
+  SUM(CASE WHEN (nc_on+nns_on)>0 THEN 1 ELSE 0 END) AS g_on_slots,
+  SUM(CASE WHEN (nc_on+nns_on)>0 THEN slot_duration ELSE 0 END) AS g_on_min,
+  SUM(CASE WHEN nc_on>0 THEN 1 ELSE 0 END) AS n_on_slots,
+  SUM(CASE WHEN nc_on>0 THEN slot_duration ELSE 0 END) AS n_on_min
 FROM ss
 GROUP BY 1,2,3
 ORDER BY 1,2,3"""
@@ -162,11 +169,13 @@ def main():
     prog = {}
     for name, mh, sh in prog_rows:
         prog[name] = "MH" if (mh or 0) > (sh or 0) else "SH"
-    # rows: dt, therapist, channel, slots, mins, gross_slots, gross_min, net_slots, net_min
-    out_rows = [[r[0], r[1], prog.get(r[1], "SH"), r[2], r[3], r[4], r[5], r[6], r[7], r[8]]
-                for r in slot_rows]
-    cols = ["dt", "therapist", "program", "channel",
-            "slots", "mins", "gross_slots", "gross_min", "net_slots", "net_min"]
+    # rows: dt, therapist, channel, slots, mins, then g/n x off/on slot+min pairs.
+    # channel = where the CAPACITY sits (dual offline+online blocks count as Offline);
+    # g_*/n_* minutes are bucketed by the MODE of the appointment that consumed the slot.
+    out_rows = [[r[0], r[1], prog.get(r[1], "SH")] + list(r[2:]) for r in slot_rows]
+    cols = ["dt", "therapist", "program", "channel", "slots", "mins",
+            "g_off_slots", "g_off_min", "n_off_slots", "n_off_min",
+            "g_on_slots", "g_on_min", "n_on_slots", "n_on_min"]
     payload = {
         "updated": datetime.now().strftime("%Y-%m-%d %H:%M IST"),
         "columns": cols,
