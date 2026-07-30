@@ -25,13 +25,24 @@ HERE = Path(__file__).resolve().parent
 TH = "fe5b19b4-5961-4036-bc5f-fb1009a27d64"
 
 # TH slots have in_repeat_boundary=0 always; qualifying = booked (same-type) or still bookable.
-SLOT_QUERY = f"""WITH raw_slots AS (
+# channel is 3-way from the BLOCK's location mappings: Offline (offline-only),
+# Online (online-only), Both (dual offline+online block).
+SLOT_QUERY = f"""WITH blk_ch AS (
+  SELECT appointment_block_id,
+         MAX(CASE WHEN offline_location_id IS NOT NULL THEN 1 ELSE 0 END) AS has_off,
+         MAX(CASE WHEN online_location_id IS NOT NULL THEN 1 ELSE 0 END) AS has_on
+  FROM allo_consultations.appointment_block_type_maps
+  WHERE deleted_at IS NULL
+  GROUP BY 1),
+raw_slots AS (
   SELECT DISTINCT rs.provider_id, rs.location_id, rs.start_time, rs.end_time,
     pro.name AS therapist,
-    CASE WHEN abtm.offline_location_id IS NOT NULL THEN 'Offline' ELSE 'Online' END AS channel
+    CASE WHEN bc.has_off=1 AND bc.has_on=1 THEN 'Both'
+         WHEN bc.has_off=1 THEN 'Offline' ELSE 'Online' END AS channel
   FROM allo_consultations.roster_slots rs
   JOIN allo_persons.providers pro ON rs.provider_id = pro.id AND pro.is_therapist = 1
-  LEFT JOIN (SELECT DISTINCT *, COALESCE(offline_location_id, online_location_id) AS block_location_id
+  JOIN blk_ch bc ON rs.block_id = bc.appointment_block_id
+  LEFT JOIN (SELECT DISTINCT appointment_block_id, COALESCE(offline_location_id, online_location_id) AS block_location_id
              FROM allo_consultations.appointment_block_type_maps WHERE deleted_at IS NULL) abtm
     ON rs.block_id = abtm.appointment_block_id
   WHERE abtm.block_location_id = rs.location_id
@@ -51,8 +62,7 @@ slot_data AS (
                DATEDIFF(minute,start_time,end_time) AS slot_duration,
                channel,
                ROW_NUMBER() OVER (PARTITION BY provider_id, start_time
-                                  ORDER BY CASE WHEN channel='Offline' THEN 0 ELSE 1 END,
-                                           end_time, location_id) AS loc_rn
+                                  ORDER BY end_time, location_id) AS loc_rn
         FROM raw_slots) x WHERE loc_rn = 1),
 appointment_data AS (
   SELECT app.id AS appt_id, app.provider_id,
@@ -170,7 +180,7 @@ def main():
     for name, mh, sh in prog_rows:
         prog[name] = "MH" if (mh or 0) > (sh or 0) else "SH"
     # rows: dt, therapist, channel, slots, mins, then g/n x off/on slot+min pairs.
-    # channel = where the CAPACITY sits (dual offline+online blocks count as Offline);
+    # channel = block's bookability: Offline (offline-only) / Online (online-only) / Both (dual);
     # g_*/n_* minutes are bucketed by the MODE of the appointment that consumed the slot.
     out_rows = [[r[0], r[1], prog.get(r[1], "SH")] + list(r[2:]) for r in slot_rows]
     cols = ["dt", "therapist", "program", "channel", "slots", "mins",
