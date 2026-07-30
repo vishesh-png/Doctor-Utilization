@@ -239,7 +239,8 @@ footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
     document.getElementById('docBody').innerHTML = '<tr><td colspan="12" class="empty">No data — run fetch_data.py first.</td></tr>';
     return;
   }
-  document.getElementById('updated').textContent = 'Data through yesterday · refreshed ' + D.updated;
+  document.getElementById('updated').innerHTML = 'Data through yesterday · refreshed ' + D.updated +
+    ' · <a href="weekly.html" style="color:var(--sc);text-decoration:none">Weekly deep-dive →</a>';
 
   const C = {}; D.columns.forEach((c,i)=>C[c]=i);
   const rows = D.rows;

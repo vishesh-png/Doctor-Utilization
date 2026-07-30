@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Weekly Deep-Dive — Doctor Utilization</title>
+<style>
+:root {
+  --surface-1:#fcfcfb; --page:#f9f9f7;
+  --ink-1:#0b0b0b; --ink-2:#52514e; --ink-3:#898781;
+  --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,0.10);
+  --sh:#2a78d6; --sh-soft:#9ec5f4;
+  --mh:#4a3aa7; --mh-soft:#b3abe8;
+  --good:#006300; --bad:#d03b3b;
+  --track:#f0efec;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-1:#1a1a19; --page:#0d0d0d;
+    --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
+    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,0.10);
+    --sh:#3987e5; --sh-soft:#1c5cab;
+    --mh:#9085e9; --mh-soft:#4a3aa7;
+    --good:#0ca30c; --bad:#e66767;
+    --track:#2c2c2a;
+  }
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--page); color:var(--ink-1);
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif; font-size:14px; }
+.wrap { max-width:1150px; margin:0 auto; padding:20px 24px 60px; }
+header h1 { font-size:20px; margin:0 0 2px; }
+header .sub { color:var(--ink-3); font-size:12px; }
+header .sub a { color:var(--sh); text-decoration:none; }
+.defn { color:var(--ink-2); font-size:12px; margin-top:8px; max-width:980px; line-height:1.55; }
+.chips { display:flex; gap:8px; flex-wrap:wrap; margin:14px 0 4px; }
+.chip { background:var(--surface-1); border:1px solid var(--border); border-radius:8px;
+  padding:7px 12px; font-size:12px; color:var(--ink-2); }
+.chip b { color:var(--ink-1); font-size:14px; }
+.card { background:var(--surface-1); border:1px solid var(--border); border-radius:10px;
+  padding:16px; margin:16px 0; }
+.card h2 { font-size:15px; margin:0 0 2px; }
+.card .note { font-size:12px; color:var(--ink-3); margin-bottom:12px; }
+.minis { display:grid; grid-template-columns:repeat(auto-fit,minmax(118px,1fr)); gap:8px; margin-bottom:14px; }
+.mini { border:1px solid var(--border); border-radius:8px; padding:9px 11px; background:var(--page); }
+.mini .l { font-size:11px; color:var(--ink-2); white-space:nowrap; }
+.mini .v { font-size:19px; font-weight:650; margin-top:1px; }
+.mini .s { font-size:11px; color:var(--ink-3); }
+.barwrap { margin:6px 0 4px; }
+.stackbar { display:flex; height:22px; border-radius:5px; overflow:hidden; gap:2px; background:var(--track); }
+.stackbar div { height:100%; }
+.legend { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--ink-2); margin-top:8px; }
+.key { display:inline-flex; align-items:center; gap:6px; }
+.sw { width:11px; height:11px; border-radius:3px; display:inline-block; }
+table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; font-size:13px; margin-top:6px; }
+th, td { padding:6px 8px; text-align:right; white-space:nowrap; }
+th:first-child, td:first-child { text-align:left; }
+th { font-size:10px; color:var(--ink-3); font-weight:600; text-transform:uppercase;
+  letter-spacing:.02em; border-bottom:1px solid var(--axis); }
+tbody tr { border-bottom:1px solid var(--grid); }
+tr.total td { font-weight:650; border-top:1px solid var(--axis); }
+.pill { display:inline-block; font-size:10px; font-weight:600; border-radius:5px; padding:1px 6px; }
+.pill.sh { background:var(--sh-soft); color:#fff; mix-blend-mode:normal; }
+.pill.mh { background:var(--mh-soft); color:#fff; }
+.muted { color:var(--ink-3); }
+.insights { border-left:3px solid var(--sh); }
+.insights li { margin:6px 0; line-height:1.5; }
+.insights b { color:var(--ink-1); }
+footer { color:var(--ink-3); font-size:11px; margin-top:18px; line-height:1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Weekly Utilization Deep-Dive</h1>
+    <div class="sub" id="who"></div>
+    <div class="sub"><a href="index.html">← back to the main utilization tracker</a></div>
+    <div class="defn">
+      <b>Definitions</b> — everything is measured in <b>minutes of roster capacity</b>, because SH and MH consults
+      have different lengths (see config chips below). <b>Gross utilization</b> = (completed + no-show time) ÷ total
+      slot time. <b>Net utilization</b> = completed time ÷ total slot time. Rescheduled and cancelled bookings are
+      shown separately — they release the slot back, so they don't count as utilization. Program: bookings tagged
+      <i>mental_health</i> → MH; <i>sexual_health</i> or untagged → SH (verified: all untagged bookings have SH-config
+      durations). Statuses: completed = COMPLETED, no-show = MISSED, rescheduled = RESCHEDULED.
+    </div>
+  </header>
+
+  <div class="chips" id="chips"></div>
+  <div class="defn" id="unitNote"></div>
+
+  <div class="card" id="scCard">
+    <h2>Screening Calls (SC)</h2>
+    <div class="note">The roster is cut into SH-sized SC units; one MH screening consumes multiple consecutive units.</div>
+    <div class="minis" id="scMinis"></div>
+    <div class="barwrap"><div class="stackbar" id="scBar"></div></div>
+    <div class="legend" id="scLegend"></div>
+    <table id="scTable"></table>
+  </div>
+
+  <div class="card" id="rptCard">
+    <h2>Repeats (FU · Report Reading · Patient Queries)</h2>
+    <div class="note">Repeat units are SH-sized; one MH follow-up consumes multiple consecutive units.</div>
+    <div class="minis" id="rptMinis"></div>
+    <div class="barwrap"><div class="stackbar" id="rptBar"></div></div>
+    <div class="legend" id="rptLegend"></div>
+    <table id="rptTable"></table>
+    <table id="subTable" style="margin-top:14px"></table>
+  </div>
+
+  <div class="card">
+    <h2>Day by day</h2>
+    <div class="note">Slot units offered and booked per day (from the roster grid).</div>
+    <table id="dayTable"></table>
+  </div>
+
+  <div class="card insights">
+    <h2>What this week says</h2>
+    <ul id="insights"></ul>
+  </div>
+
+  <footer>
+    Data: allo_prod · roster_slots (corrected dedup) + appointments + consultation_type_configs.
+    Refresh: <code>python3 fetch_weekly_data.py [provider_id] [week_start]</code>. Currently a single-doctor,
+    single-week view; week-on-week comparison comes next.
+  </footer>
+</div>
+
+<script src="data_weekly.js"></script>
+<script>
+(function(){
+  const D = window.WEEKLY_DATA;
+  if (!D){ document.body.innerHTML = '<p style="padding:40px">No data — run fetch_weekly_data.py</p>'; return; }
+  const fmtD = s => new Date(s+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+  document.getElementById('who').textContent =
+    `${D.doctor} · ${D.locations.join(' + ')} · Week ${fmtD(D.week_start)} – ${fmtD(D.week_end)}, ${D.week_start.slice(0,4)} · refreshed ${D.updated}`;
+
+  // ---- configs ----
+  const cfg = {};
+  D.configs.forEach(c=>{ cfg[`${c.type}|${c.program}`] = c.mins; });
+  const scSH = cfg['SC|sexual_health'] ?? cfg['SC|any'] ?? 10;
+  const scMH = cfg['SC|mental_health'] ?? scSH;
+  const fuSH = cfg['FU|any'] ?? cfg['FU|sexual_health'] ?? 5;
+  const fuMH = cfg['FU|mental_health'] ?? fuSH;
+  document.getElementById('chips').innerHTML = [
+    ['SC · Sexual health', scSH], ['SC · Mental health', scMH],
+    ['Repeat · Sexual health', fuSH], ['Repeat (FU) · Mental health', fuMH],
+  ].map(([l,v])=>`<div class="chip">${l}<br><b>${v} min</b></div>`).join('');
+  document.getElementById('unitNote').innerHTML =
+    `Roster units: SC grid = <b>${scSH}-min</b> units, repeat grid = <b>${fuSH}-min</b> units. ` +
+    `One MH screening (${scMH}m) consumes <b>${Math.round(scMH/scSH)} SC units</b>; ` +
+    `one MH follow-up (${fuMH}m) consumes <b>${Math.round(fuMH/fuSH)} repeat units</b>. ` +
+    `Capacity is one shared pool per type — the SH/MH split below shows how it was consumed.`;
+
+  // ---- helpers ----
+  const isMH = p => p === 'mental_health';
+  const REPEAT = new Set(['FU','RR','PQ']);
+  const pct = (n,d) => d>0 ? (100*n/d) : null;
+  const fp = v => v==null?'–':v.toFixed(1)+'%';
+  const hrs = m => (m/60).toFixed(1)+'h';
+
+  function collect(types){
+    const g = { SH:blankG(), MH:blankG() };
+    D.appts.forEach(a=>{
+      if (!types.has(a.type)) return;
+      const b = g[isMH(a.program)?'MH':'SH'];
+      const st = a.status;
+      if (st==='COMPLETED'){ b.comp+=a.n; b.compMin+=a.mins; }
+      else if (st==='MISSED'){ b.ns+=a.n; b.nsMin+=a.mins; }
+      else if (st==='RESCHEDULED'){ b.resch+=a.n; b.reschMin+=a.mins; }
+      else if (st==='CANCELLED'){ b.canc+=a.n; }
+      else if (st==='SCHEDULED'){ b.sched+=a.n; }
+    });
+    return g;
+  }
+  function blankG(){ return {comp:0,compMin:0,ns:0,nsMin:0,resch:0,reschMin:0,canc:0,sched:0}; }
+
+  function slotTotals(typ){
+    let units=0, mins=0, bookedUnits=0;
+    D.slots.forEach(s=>{ if(s.typ===typ){ units+=s.slots; mins+=s.slots*s.dur; bookedUnits+=s.booked; } });
+    return {units, mins, bookedUnits};
+  }
+
+  function section(prefix, types, typKey, unitMins, mhMins){
+    const g = collect(types);
+    const cap = slotTotals(typKey);
+    const grossMin = g.SH.compMin+g.SH.nsMin+g.MH.compMin+g.MH.nsMin;
+    const netMin = g.SH.compMin+g.MH.compMin;
+
+    // minis
+    document.getElementById(prefix+'Minis').innerHTML = [
+      {l:'Units offered', v:cap.units, s:hrs(cap.mins)+' · '+unitMins+'m units'},
+      {l:'Gross utilization', v:fp(pct(grossMin,cap.mins)), s:hrs(grossMin)+' used'},
+      {l:'Net utilization', v:fp(pct(netMin,cap.mins)), s:hrs(netMin)+' completed'},
+      {l:'Completed', v:g.SH.comp+g.MH.comp, s:`SH ${g.SH.comp} · MH ${g.MH.comp}`},
+      {l:'No-shows', v:g.SH.ns+g.MH.ns, s:`SH ${g.SH.ns} · MH ${g.MH.ns}`},
+      {l:'Rescheduled', v:g.SH.resch+g.MH.resch, s:`SH ${g.SH.resch} · MH ${g.MH.resch}`},
+    ].map(m=>`<div class="mini"><div class="l">${m.l}</div><div class="v">${m.v}</div><div class="s">${m.s}</div></div>`).join('');
+
+    // stacked consumption bar (minutes of capacity)
+    const idle = Math.max(0, cap.mins - grossMin);
+    const segs = [
+      {v:g.SH.compMin, c:'var(--sh)', n:'SH completed'},
+      {v:g.MH.compMin, c:'var(--mh)', n:'MH completed'},
+      {v:g.SH.nsMin, c:'var(--sh-soft)', n:'SH no-show'},
+      {v:g.MH.nsMin, c:'var(--mh-soft)', n:'MH no-show'},
+      {v:idle, c:'transparent', n:'Idle / released'},
+    ];
+    document.getElementById(prefix+'Bar').innerHTML =
+      segs.filter(s=>s.v>0).map(s=>`<div style="flex:${s.v};background:${s.c}" title="${s.n}: ${s.v}m"></div>`).join('');
+    document.getElementById(prefix+'Legend').innerHTML =
+      segs.map(s=>`<span class="key"><span class="sw" style="background:${s.c==='transparent'?'var(--track)':s.c}"></span>${s.n} · ${Math.round(s.v)}m (${fp(pct(s.v,cap.mins))})</span>`).join('');
+
+    // program table
+    const row = (name, b, cls) => {
+      const booked = b.comp+b.ns+b.resch+b.canc+b.sched;
+      const gm = b.compMin+b.nsMin;
+      return `<tr class="${cls||''}">
+        <td>${name}</td>
+        <td>${booked}</td><td>${b.comp}</td><td>${b.ns}</td><td>${b.resch}</td><td>${b.canc}</td>
+        <td>${b.compMin+b.nsMin ? Math.round(gm/unitMins*10)/10 : 0}</td>
+        <td>${Math.round(gm)}m</td><td>${Math.round(b.compMin)}m</td>
+        <td>${fp(pct(gm,cap.mins))}</td><td>${fp(pct(b.compMin,cap.mins))}</td>
+        <td>${fp(pct(gm,grossMin))}</td>
+      </tr>`;
+    };
+    const tot = blankG();
+    ['SH','MH'].forEach(k=>{ const b=g[k]; for(const f in tot) tot[f]+=b[f]; });
+    document.getElementById(prefix+'Table').innerHTML = `
+      <thead><tr><th>Program</th><th>Booked</th><th>Completed</th><th>No-show</th><th>Resched</th><th>Cancelled</th>
+      <th>Units used</th><th>Gross time</th><th>Net time</th><th>Gross util</th><th>Net util</th><th>Share of used time</th></tr></thead>
+      <tbody>
+        ${row('Sexual health (SH)', g.SH)}
+        ${row('Mental health (MH)', g.MH)}
+        ${row('Total', tot, 'total')}
+      </tbody>`;
+    return {g, cap, grossMin, netMin};
+  }
+
+  const sc = section('sc', new Set(['SC']), 'SC', scSH, scMH);
+  const rpt = section('rpt', REPEAT, 'RPT', fuSH, fuMH);
+
+  // repeat subtype mini-table
+  const subAgg = {};
+  D.appts.forEach(a=>{
+    if (!REPEAT.has(a.type)) return;
+    const k = a.type + '|' + (isMH(a.program)?'MH':'SH');
+    const o = subAgg[k] = subAgg[k] || {comp:0,ns:0,resch:0};
+    if (a.status==='COMPLETED') o.comp+=a.n;
+    else if (a.status==='MISSED') o.ns+=a.n;
+    else if (a.status==='RESCHEDULED') o.resch+=a.n;
+  });
+  const subKeys = Object.keys(subAgg).sort();
+  document.getElementById('subTable').innerHTML = `
+    <thead><tr><th>Repeat subtype</th><th>Completed</th><th>No-show</th><th>Resched</th></tr></thead>
+    <tbody>${subKeys.map(k=>{
+      const [t,p]=k.split('|'), o=subAgg[k];
+      const nm = {FU:'Follow Up',RR:'Report Reading',PQ:'Patient Queries'}[t];
+      return `<tr><td>${nm} · ${p}</td><td>${o.comp}</td><td>${o.ns}</td><td>${o.resch}</td></tr>`;
+    }).join('')}</tbody>`;
+
+  // day-by-day
+  const days = [];
+  for (let i=0;i<7;i++){
+    const d = new Date(D.week_start+'T00:00:00'); d.setDate(d.getDate()+i);
+    days.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+  }
+  const byDay = {};
+  D.slots.forEach(s=>{ const o = byDay[s.dt] = byDay[s.dt] || {sc:0,scB:0,rp:0,rpB:0};
+    if (s.typ==='SC'){ o.sc+=s.slots; o.scB+=s.booked; } else { o.rp+=s.slots; o.rpB+=s.booked; } });
+  const wd = s => new Date(s+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short'});
+  document.getElementById('dayTable').innerHTML = `
+    <thead><tr><th>Day</th><th>SC units</th><th>SC booked</th><th>SC booked %</th>
+    <th>Repeat units</th><th>Repeat booked</th><th>Repeat booked %</th></tr></thead>
+    <tbody>${days.map(dt=>{
+      const o = byDay[dt];
+      if (!o) return `<tr><td>${wd(dt)} ${fmtD(dt)}</td><td colspan="6" class="muted">no roster — day off</td></tr>`;
+      return `<tr><td>${wd(dt)} ${fmtD(dt)}</td><td>${o.sc}</td><td>${o.scB}</td><td>${fp(pct(o.scB,o.sc))}</td>
+        <td>${o.rp}</td><td>${o.rpB}</td><td>${fp(pct(o.rpB,o.rp))}</td></tr>`;
+    }).join('')}</tbody>`;
+
+  // insights
+  const ins = [];
+  const mhShare = pct(sc.g.MH.compMin+sc.g.MH.nsMin, sc.grossMin);
+  const mhBookShare = pct(sc.g.MH.comp+sc.g.MH.ns+sc.g.MH.resch,
+    sc.g.MH.comp+sc.g.MH.ns+sc.g.MH.resch+sc.g.SH.comp+sc.g.SH.ns+sc.g.SH.resch);
+  ins.push(`<li><b>${fp(mhShare)} of her utilized SC time went to Mental Health</b> from only ${fp(mhBookShare)} of SC bookings — each MH screening (${scMH}m) costs ${Math.round(scMH/scSH)}× an SH screening, so MH demand is the main consumer of her screening capacity.</li>`);
+  const scResch = sc.g.SH.resch + sc.g.MH.resch, scBookedAll = scResch + sc.g.SH.comp+sc.g.MH.comp+sc.g.SH.ns+sc.g.MH.ns;
+  ins.push(`<li><b>${scResch} of ${scBookedAll} SC bookings (${fp(pct(scResch,scBookedAll))}) were rescheduled away</b> — time that was blocked on the calendar but produced nothing. Add the no-shows and only ${fp(pct(sc.netMin,sc.cap.mins))} of SC capacity ended in a completed consult.</li>`);
+  const nsMH = pct(sc.g.MH.ns, sc.g.MH.comp+sc.g.MH.ns), nsSH = pct(sc.g.SH.ns, sc.g.SH.comp+sc.g.SH.ns);
+  ins.push(`<li>No-show rate on held SC calls: <b>MH ${fp(nsMH)} vs SH ${fp(nsSH)}</b>${(nsMH||0)>(nsSH||0)?' — MH patients no-show more, and each MH no-show wastes '+scMH+' minutes, not '+scSH+'.':'.'}</li>`);
+  const offDays = days.filter(d=>!byDay[d]).map(wd);
+  if (offDays.length) ins.push(`<li>No roster on <b>${offDays.join(', ')}</b>.</li>`);
+  const idleShare = pct(Math.max(0, sc.cap.mins - sc.grossMin), sc.cap.mins);
+  ins.push(`<li><b>${fp(idleShare)} of SC capacity sat idle or was released</b> (${hrs(Math.max(0,sc.cap.mins-sc.grossMin))}). Repeat capacity idle: ${fp(pct(Math.max(0,rpt.cap.mins-rpt.grossMin),rpt.cap.mins))}.</li>`);
+  document.getElementById('insights').innerHTML = ins.join('');
+})();
+</script>
+</body>
+</html>
