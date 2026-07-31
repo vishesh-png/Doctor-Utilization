@@ -159,13 +159,16 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
     // channel is 3-way in the data: Offline-only / Online-only / Both (dual block).
     // Dual-block capacity is bookable either way, so it counts as offered in BOTH
     // channel sections; with no channel filter each window counts once.
-    let u=0, m=0;
+    // w/wm = the subset inside live online-preferred windows (offline booking
+    // for those slots closed at the configured cutoff before the window).
+    let u=0, m=0, w=0, wm=0;
     D.slots.forEach(s=>{
       if (s.typ!==typ) return;
       if (channel && !(s.channel===channel || s.channel==='Both')) return;
       u+=s.slots; m+=s.slots*s.dur;
+      if (s.in_win===1){ w+=s.slots; wm+=s.slots*s.dur; }
     });
-    return {u, m};
+    return {u, m, w, wm};
   }
   function outcomes(typ, channel, program){
     const o = {comp:0,ns:0,resch:0,canc:0, compM:0,nsM:0,reschM:0,cancM:0};
@@ -211,7 +214,7 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
         </tr>`;
       }
       return `<tr class="${r.cls||''}${r.tip?' hasTip':''}">${dims}
-        <td><span class="big">${fmtN(offV)}</span>${r.shared?' <span class="muted">*</span>':''}</td>
+        <td><span class="big">${fmtN(offV)}</span>${r.shared?' <span class="muted">*</span>':''}${r.offNote?`<span style="display:block;font-size:10.5px;color:var(--ink-3);font-weight:400">${r.offNote}</span>`:''}</td>
         <td class="${r.tip?'tipanchor':''}"><b class="${r.tip?'tt':''}">${fmtN(val('booked'))}</b>${r.tip||''}</td>
         <td class="mut">${fmtN(val('comp'))}</td>
         <td class="mut">${fmtN(val('ns'))}</td>
@@ -229,6 +232,23 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
   const twoLevels = html =>
     band('Company / Overall level', 'all doctors — 1 in this prototype') + html +
     band(`Doctor level — ${D.doctor}`, 'identical to company level by construction') + html;
+  function pscCard(){
+    if (!D.psc || !D.psc.length) return '';
+    const chips = D.psc.map(w=>{
+      let cut = '';
+      try {
+        const c = JSON.parse(w.cutoffs || '[]')[0];
+        if (c && c.locationType) cut = ` · ${c.locationType} bookable only until ${c.cutoffMins/60}h before`;
+        else if (c && c.slotCategory) cut = ` · reserved for ${c.slotCategory}`;
+      } catch(e){}
+      const kind = w.kind==='online' ? 'Online-preferred' : (w.kind==='repeat' ? 'Repeat-preferred' : w.kind);
+      return `<div class="cfgchip">${kind} · <b>${w.start}–${w.end}</b>${cut}</div>`;
+    }).join('');
+    return `<div class="cfgcard"><h3>Preferred hours (this day)</h3><div class="cfgrow">${chips}</div>
+      <div class="note">Slots inside an online-preferred window are always bookable online; offline booking for them closes at the
+      cutoff before the window (early-bird only). Repeat-preferred windows reserve capacity for repeat consults — the SC vs RPT
+      offered split already honours them via the roster's boundary flags.</div></div>`;
+  }
   const cfgCard = (chips, extra) => `<div class="cfgcard"><h3>Slot configuration</h3>
       <div class="cfgrow">${chips.map(([l,v])=>`<div class="cfgchip">${l} · <b>${v} min</b></div>`).join('')}</div>
       ${extra?`<div class="note">${extra}</div>`:''}</div>`;
@@ -248,7 +268,8 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
       twoLevels(matrix(['Scope'], rows)) +
       cfgCard([['SC slot unit',UNIT.SC],['RPT slot unit',UNIT.RPT],
                ['SC · Mental Health booking',PMIN['SC|mental_health']],['FU · Mental Health booking',PMIN['RPT|mental_health']]],
-        'Slot Level mixes 10-min SC units and 5-min repeat units in one count — Hour Level is the cleaner single number for the full-day picture.');
+        'Slot Level mixes 10-min SC units and 5-min repeat units in one count — Hour Level is the cleaner single number for the full-day picture.') +
+      pscCard();
     const offV = isHour() ? off.m : off.u;
     const v = k => isHour() ? o[k+'M'] : o[k];
     document.getElementById('exec').innerHTML =
@@ -266,7 +287,9 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
       twoLevels(matrix(['Type'], rows)) +
       cfgCard([['SC slot unit',UNIT.SC],['RPT slot unit',UNIT.RPT],
                ['SC · Mental Health booking',PMIN['SC|mental_health']],['FU · Mental Health booking',PMIN['RPT|mental_health']]],
-        'The roster grid is cut in the base unit sizes; a Mental Health booking spans multiple consecutive units, which is why hour-level utilization can differ from slot-level.');
+        'The roster grid is cut in the base unit sizes; a Mental Health booking spans multiple consecutive units, which is why hour-level utilization can differ from slot-level. ' +
+        'SC offered excludes repeat/online-preferred windows (roster boundary flags); RPT offered = those windows + booked repeat slots.') +
+      pscCard();
     const sc = outcomes('SC'), so = offered('SC'), rp = outcomes('RPT'), ro = offered('RPT');
     document.getElementById('exec').innerHTML =
       `<b>${fmtDay.split(',')[0]}:</b> SC ran at <b>${fp(pctv(isHour()?sc.compM+sc.nsM:sc.comp+sc.ns, isHour()?so.m:so.u))} gross</b> / ${fp(pctv(isHour()?sc.compM:sc.comp, isHour()?so.m:so.u))} net on ${fmtN(isHour()?so.m:so.u)} ${isHour()?'offered':'slots'}; ` +
@@ -278,9 +301,12 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
     const rows = [];
     ['SC','RPT'].forEach(t=>{
       CHANNELS.forEach((ch,i)=>{
+        const off = offered(t,ch);
+        const w = isHour() ? off.wm : off.w;
         rows.push({
           dims:[ i===0 ? {label:t, sub:TYPE_SUB[t], span:CHANNELS.length} : null, {label:ch} ],
-          off:offered(t,ch), o:outcomes(t,ch), cfg:UNIT[t]
+          off, o:outcomes(t,ch), cfg:UNIT[t],
+          offNote: w>0 ? (ch==='Offline' ? `incl. ${fmtN(w)} early-bird only` : `incl. ${fmtN(w)} online-preferred`) : null
         });
       });
     });
@@ -290,7 +316,9 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
                ['SC · Mental Health booking',PMIN['SC|mental_health']],['FU · Mental Health booking',PMIN['RPT|mental_health']]],
         'Slot configuration does not vary by channel. A booking’s channel is the appointment’s mode; slot capacity’s channel comes from the roster block’s ' +
         'location mappings, PER TYPE — a block can offer SC offline-only while offering repeats offline+online. Types a doctor never maps to a channel ' +
-        'show as “Not offered”. Where a type IS dual-mapped, its slots count as offered in both channel rows (so Offline + Online offered can exceed the Tab 1 total).');
+        'show as “Not offered”. Where a type IS dual-mapped, its slots count as offered in both channel rows (so Offline + Online offered can exceed the Tab 1 total). ' +
+        '“Early-bird only” = slots in an online-preferred window whose offline booking closed at the cutoff before the window.') +
+      pscCard();
     const so=offered('SC','Offline'), sn=offered('SC','Online');
     document.getElementById('exec').innerHTML =
       `<b>Channel mix:</b> SC capacity splits ${fmtN(isHour()?so.m:so.u)} offline vs ${fmtN(isHour()?sn.m:sn.u)} online. ` +
@@ -338,9 +366,12 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
             tip: p==='sh' ? shTip(t,ch,progOff) : null
           });
         });
+        const offCh = offered(t,ch);
+        const wCh = isHour() ? offCh.wm : offCh.w;
         rows.push({
           dims:[null, null, {label:'All programs'}],
-          off:offered(t,ch), o:outcomes(t,ch), cfg:UNIT[t], cls:'subtotal'
+          off:offCh, o:outcomes(t,ch), cfg:UNIT[t], cls:'subtotal',
+          offNote: wCh>0 ? (ch==='Offline' ? `incl. ${fmtN(wCh)} early-bird only` : `incl. ${fmtN(wCh)} online-preferred`) : null
         });
       });
     });
@@ -352,7 +383,8 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
         'expressed in <b>its own slot size</b>: e.g. 300 shared SC minutes = 30 Sexual-Health slots (10 min) but only 10 Mental-Health slots (30 min). ' +
         'Utilization on a program row = that program’s bookings ÷ what the pool could hold at its slot size — equivalently, its share of pool time. ' +
         'The “All programs” subtotal row counts the pool in base units. Sexual Health includes untagged bookings (their slot length matches the SH config); ' +
-        '<b>hover the Sexual Health “Total Booked” value</b> to see the tagged-vs-unattributed split with full outcomes and utilization.');
+        '<b>hover the Sexual Health “Total Booked” value</b> to see the tagged-vs-unattributed split with full outcomes and utilization.') +
+      pscCard();
     const mh = outcomes('SC',null,'mental_health');
     const shc = combine(outcomes('SC',null,'sexual_health'), outcomes('SC',null,'unattributed'));
     document.getElementById('exec').innerHTML =

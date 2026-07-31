@@ -86,14 +86,19 @@ ORDER BY 1,2"""
 # one row per physical window (dedup across locations); channel is 3-way and
 # PER CONSULTATION TYPE from the block's type maps: a block can offer SC offline-only
 # while offering repeats offline+online (e.g. Dr. Sandhiya's clinic days)
-Q_SLOTS = f"""SELECT typ, channel, dur, COUNT(*) AS slots, SUM(booked) AS booked
+Q_SLOTS = f"""SELECT typ, channel, in_win, dur, COUNT(*) AS slots, SUM(booked) AS booked
 FROM (
-  SELECT typ, start_time, channel, dur, booked,
+  SELECT typ, start_time, channel, in_win, dur, booked,
          ROW_NUMBER() OVER (PARTITION BY typ, start_time ORDER BY dur) AS rn
   FROM (
     SELECT DISTINCT
            CASE WHEN rs.type_id='{SC}' THEN 'SC' ELSE 'RPT' END AS typ,
            rs.start_time,
+           CASE WHEN EXISTS (SELECT 1 FROM allo_consultations.preferred_slot_configs psc
+                 WHERE psc.provider_id=rs.provider_id AND psc.deleted_at IS NULL
+                   AND psc.type='live' AND psc.location_type='online'
+                   AND rs.start_time >= psc.start_time AND rs.start_time < psc.end_time)
+                THEN 1 ELSE 0 END AS in_win,
            CASE WHEN bc.has_off=1 AND bc.has_on=1 THEN 'Both'
                 WHEN bc.has_off=1 THEN 'Offline' ELSE 'Online' END AS channel,
            DATEDIFF(minute,rs.start_time,rs.end_time) AS dur,
@@ -116,7 +121,16 @@ FROM (
                                          OR (rs.type_id='{RPT}' AND rs.in_repeat_boundary=1))))
   ) r
 ) w WHERE rn=1
-GROUP BY 1,2,3 ORDER BY 1,2,3"""
+GROUP BY 1,2,3,4 ORDER BY 1,2,3,4"""
+
+Q_PSC = f"""SELECT COALESCE(location_type, slot_category) AS kind,
+  DATEADD(minute,330,start_time) AS win_start_ist,
+  DATEADD(minute,330,end_time) AS win_end_ist,
+  JSON_SERIALIZE(cutoff_scopes) AS cutoffs
+FROM allo_consultations.preferred_slot_configs
+WHERE provider_id='{PROVIDER}' AND deleted_at IS NULL AND type='live'
+  AND CAST(DATEADD(minute,330,start_time) AS DATE)='{DAY}'
+ORDER BY start_time"""
 
 Q_APPTS = f"""SELECT
        CASE WHEN t.code='SC' THEN 'SC' ELSE 'RPT' END AS typ,
@@ -136,8 +150,10 @@ GROUP BY 1,2,3,4,5 ORDER BY 1,2,3,4,5"""
 def main():
     doctor = run_query(Q_DOCTOR, "doctor")[0][0]
     configs = [{"type": r[0], "program": r[1], "mins": r[2]} for r in run_query(Q_CONFIGS, "configs")]
-    slots = [{"typ": r[0], "channel": r[1], "dur": r[2], "slots": r[3], "booked": r[4]}
+    slots = [{"typ": r[0], "channel": r[1], "in_win": r[2], "dur": r[3], "slots": r[4], "booked": r[5]}
              for r in run_query(Q_SLOTS, "slots")]
+    psc = [{"kind": r[0], "start": str(r[1])[11:16], "end": str(r[2])[11:16], "cutoffs": r[3]}
+           for r in run_query(Q_PSC, "preferred windows")]
     appts = [{"typ": r[0], "channel": r[1], "program": r[2], "status": r[3], "uas": r[4], "n": r[5]}
              for r in run_query(Q_APPTS, "appointments")]
     payload = {
@@ -148,6 +164,7 @@ def main():
         "configs": configs,
         "slots": slots,
         "appts": appts,
+        "psc": psc,
     }
     out = HERE / "data_prototype.js"
     out.write_text("window.PROTO_DATA = " + json.dumps(payload, separators=(",", ":")) + ";\n")
