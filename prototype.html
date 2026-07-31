@@ -45,6 +45,10 @@ header .sub a { color:var(--acc); text-decoration:none; }
   padding:5px 12px; border-radius:6px; cursor:pointer; }
 .toggle button.on { background:var(--surface-1); color:var(--ink-1); font-weight:600;
   box-shadow:0 1px 2px rgba(0,0,0,.12); }
+.statcards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:14px 0 4px; }
+.statcard { background:var(--surface-1); border:1px solid var(--border); border-radius:10px; padding:14px 18px; }
+.statcard .l { font-size:12px; color:var(--ink-2); }
+.statcard .v { font-size:28px; font-weight:700; margin-top:2px; }
 .exec { background:var(--surface-1); border:1px solid var(--border); border-left:3px solid var(--acc);
   border-radius:10px; padding:12px 16px; margin:16px 0; font-size:13px; color:var(--ink-2); line-height:1.55; }
 .exec b { color:var(--ink-1); }
@@ -420,7 +424,10 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
     if (!U){ document.getElementById('content').innerHTML =
       '<div class="cfgcard">No data — run fetch_utilization_tab.py</div>'; document.getElementById('exec').innerHTML=''; return; }
     if (!uFrom){
-      const last = U.blocks.length ? U.blocks.reduce((mx,b)=>b[1]>mx?b[1]:mx, '0') : U.updated.slice(0,10);
+      const today = new Date().toISOString().slice(0,10);
+      const past = U.blocks.filter(b=>b[1]<=today).map(b=>b[1]);
+      const last = past.length ? past.reduce((mx,d)=>d>mx?d:mx,'0')
+                 : (U.blocks.length ? U.blocks[0][1] : U.updated.slice(0,10));
       uFrom = uTo = last;
     }
     const inR = dt => dt >= uFrom && dt <= uTo;
@@ -486,7 +493,13 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
         <td><b>${fpu(totNet)}</b></td><td><b>${fpu(totGross)}</b></td></tr>
       </tbody></table></div>`;
     const docName = uDoc==='' ? 'All doctors' : U.doctors[+uDoc];
+    const statCards = `<div class="statcards">
+      <div class="statcard"><div class="l">Total block hours</div><div class="v">${fh(blockH)}h</div></div>
+      <div class="statcard"><div class="l">Total net utilization</div><div class="v">${fpu(totNet)}</div></div>
+      <div class="statcard"><div class="l">Total gross utilization</div><div class="v">${fpu(totGross)}</div></div>
+    </div>`;
     document.getElementById('content').innerHTML =
+      statCards +
       band(`${docName} — ${activeDocs.length} doctor${activeDocs.length===1?'':'s'} with roster in range`, '') + tableHtml +
       `<div class="cfgcard"><h3>How this tab computes</h3><div class="note">
         Hours = count × that DOCTOR's slot config for the row ÷ 60 (configs vary by doctor — "varies" means the selection mixes
@@ -502,8 +515,6 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
       `<b>Doctor:</b> <select id="uDoc" style="font:inherit;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--page);color:var(--ink-1);max-width:220px">${opts}</select>
        &nbsp; <b>Date:</b> <input type="date" id="uFrom" value="${uFrom}" style="font:inherit;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--page);color:var(--ink-1)">
        – <input type="date" id="uTo" value="${uTo}" style="font:inherit;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--page);color:var(--ink-1)">
-       &nbsp;·&nbsp; <b>Total block hours:</b> ${fh(blockH)}h
-       &nbsp;·&nbsp; <b>Total net:</b> ${fpu(totNet)} &nbsp;·&nbsp; <b>Total gross:</b> ${fpu(totGross)}
        <button id="uCounts" style="float:right;font:inherit;font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:7px;background:var(--track);color:var(--ink-2);cursor:pointer">${uShowCounts?'Hide counts ▾':'Show counts ▸'}</button>`;
     const bind = id => document.getElementById(id).addEventListener('change', e=>{
       if (id==='uFrom') uFrom = e.target.value; else uTo = e.target.value;
