@@ -83,22 +83,27 @@ WHERE c.deleted_at IS NULL AND t.code IN ('SC','FU','RR','PQ')
   AND c.provider_id='{PROVIDER}'
 ORDER BY 1,2"""
 
-# one row per physical window (dedup across locations, offline-preferred),
-# channel = the block-location of the kept row
+# one row per physical window (dedup across locations); channel is 3-way from the
+# BLOCK's mappings: Offline (offline-only) / Online (online-only) / Both (dual)
 Q_SLOTS = f"""SELECT typ, channel, dur, COUNT(*) AS slots, SUM(booked) AS booked
 FROM (
   SELECT typ, start_time, channel, dur, booked,
-         ROW_NUMBER() OVER (PARTITION BY typ, start_time
-                            ORDER BY CASE WHEN channel='Offline' THEN 0 ELSE 1 END) AS rn
+         ROW_NUMBER() OVER (PARTITION BY typ, start_time ORDER BY dur) AS rn
   FROM (
     SELECT DISTINCT
            CASE WHEN rs.type_id='{SC}' THEN 'SC' ELSE 'RPT' END AS typ,
            rs.start_time,
-           CASE WHEN abtm.offline_location_id IS NOT NULL THEN 'Offline' ELSE 'Online' END AS channel,
+           CASE WHEN bc.has_off=1 AND bc.has_on=1 THEN 'Both'
+                WHEN bc.has_off=1 THEN 'Offline' ELSE 'Online' END AS channel,
            DATEDIFF(minute,rs.start_time,rs.end_time) AS dur,
            rs.is_booked AS booked
     FROM allo_consultations.roster_slots rs
-    JOIN (SELECT DISTINCT *, COALESCE(offline_location_id, online_location_id) AS bl
+    JOIN (SELECT appointment_block_id,
+                 MAX(CASE WHEN offline_location_id IS NOT NULL THEN 1 ELSE 0 END) AS has_off,
+                 MAX(CASE WHEN online_location_id IS NOT NULL THEN 1 ELSE 0 END) AS has_on
+          FROM allo_consultations.appointment_block_type_maps WHERE deleted_at IS NULL
+          GROUP BY 1) bc ON rs.block_id=bc.appointment_block_id
+    JOIN (SELECT DISTINCT appointment_block_id, COALESCE(offline_location_id, online_location_id) AS bl
           FROM allo_consultations.appointment_block_type_maps WHERE deleted_at IS NULL) abtm
       ON rs.block_id=abtm.appointment_block_id AND abtm.bl=rs.location_id
     WHERE rs.provider_id='{PROVIDER}'

@@ -146,8 +146,15 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
   // ---------- aggregation ----------
   const STATUSES = { COMPLETED:'comp', MISSED:'ns', RESCHEDULED:'resch', CANCELLED:'canc' };
   function offered(typ, channel){
+    // channel is 3-way in the data: Offline-only / Online-only / Both (dual block).
+    // Dual-block capacity is bookable either way, so it counts as offered in BOTH
+    // channel sections; with no channel filter each window counts once.
     let u=0, m=0;
-    D.slots.forEach(s=>{ if (s.typ===typ && (!channel || s.channel===channel)){ u+=s.slots; m+=s.slots*s.dur; } });
+    D.slots.forEach(s=>{
+      if (s.typ!==typ) return;
+      if (channel && !(s.channel===channel || s.channel==='Both')) return;
+      u+=s.slots; m+=s.slots*s.dur;
+    });
     return {u, m};
   }
   function outcomes(typ, channel, program){
@@ -243,7 +250,9 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
       twoLevels(matrix(['Type','Channel'], rows)) +
       cfgCard([['SC slot unit (both channels)',UNIT.SC],['RPT slot unit (both channels)',UNIT.RPT],
                ['SC · Mental Health booking',PMIN['SC|mental_health']],['FU · Mental Health booking',PMIN['RPT|mental_health']]],
-        'Slot configuration does not vary by channel. A booking’s channel is the appointment’s mode; slot capacity’s channel is the roster block’s location.');
+        'Slot configuration does not vary by channel. A booking’s channel is the appointment’s mode; slot capacity’s channel comes from the roster block’s ' +
+        'location mappings — a dual offline+online block is bookable either way, so its slots count as offered in BOTH channel rows (which is why ' +
+        'Offline + Online offered can exceed the type total in Tab 1).');
     const so=offered('SC','Offline'), sn=offered('SC','Online');
     document.getElementById('exec').innerHTML =
       `<b>Channel mix:</b> SC capacity splits ${fmtN(isHour()?so.m:so.u)} offline vs ${fmtN(isHour()?sn.m:sn.u)} online. ` +
