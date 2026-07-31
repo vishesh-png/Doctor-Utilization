@@ -108,6 +108,7 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
       <button data-t="1">2 · Overall — SC vs RPT</button>
       <button data-t="2">3 · Online / Offline Split</button>
       <button data-t="3">4 · Program Split</button>
+      <button data-t="u">5 · Utilization</button>
     </div>
     <div class="toggle" id="metricToggle">
       <button data-m="slot" class="on">Slot Level</button>
@@ -122,6 +123,7 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
 </div>
 
 <script src="data_prototype.js"></script>
+<script src="data_utilz.js"></script>
 <script>
 (function(){
   const D = window.PROTO_DATA;
@@ -396,8 +398,96 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
       `Switch to Hour Level to see the true time cost (an MH screening is ${PMIN['SC|mental_health']}m vs ${PMIN['SC|sexual_health']}m).`;
   }
 
+  // ---------- Utilization tab (hours only, date-filtered) ----------
+  let uFrom=null, uTo=null;
+  function uClassify(a){
+    if (a.status==='COMPLETED') return 'comp';
+    if (a.status==='MISSED' || a.uas===1) return 'ns';
+    if (a.status==='RESCHEDULED') return 'resch';
+    if (a.status==='CANCELLED') return 'canc';
+    return null;
+  }
+  function renderTabU(){
+    const U = window.UTILZ_DATA;
+    if (!U){ document.getElementById('content').innerHTML =
+      '<div class="cfgcard">No data — run fetch_utilization_tab.py</div>'; document.getElementById('exec').innerHTML=''; return; }
+    if (!uFrom){
+      const last = U.blocks.length ? U.blocks[U.blocks.length-1].dt : U.updated.slice(0,10);
+      uFrom = uTo = last;
+    }
+    const inR = dt => dt >= uFrom && dt <= uTo;
+    const blockMins = U.blocks.filter(b=>inR(b.dt)).reduce((s,b)=>s+b.mins,0);
+    const blockH = blockMins/60;
+    const CFGU = {'SC|SH':PMIN['SC|sexual_health'],'SC|MH':PMIN['SC|mental_health'],
+                  'RPT|SH':PMIN['RPT|sexual_health'],'RPT|MH':PMIN['RPT|mental_health']};
+    const ROWS = [];
+    ['SC','RPT'].forEach(t=>['Offline','Online'].forEach(ch=>['SH','MH'].forEach(pr=>ROWS.push([t,ch,pr]))));
+    const fh = v => (Math.round(v*100)/100).toFixed(2);
+    const fpu = v => v==null?'–':(v*100).toFixed(1)+'%';
+    let totC={comp:0,ns:0,resch:0,canc:0,booked:0}, totH={comp:0,ns:0,resch:0,canc:0,booked:0};
+    const trs = ROWS.map(([t,ch,pr])=>{
+      const cfgm = CFGU[`${t}|${pr}`];
+      const o={comp:0,ns:0,resch:0,canc:0};
+      U.appts.forEach(a=>{
+        if (!inR(a.dt) || a.typ!==t || a.channel!==ch || a.program!==pr) return;
+        const k=uClassify(a); if(k) o[k]+=a.n;
+      });
+      const booked = o.comp+o.ns+o.resch+o.canc;
+      const H = k => (k==='booked'?booked:o[k])*cfgm/60;
+      totC.booked+=booked; totH.booked+=H('booked');
+      ['comp','ns','resch','canc'].forEach(k=>{ totC[k]+=o[k]; totH[k]+=H(k); });
+      const net = blockH>0 ? H('comp')/blockH : null;
+      const gross = blockH>0 ? (H('comp')+H('ns'))/blockH : null;
+      return `<tr>
+        <td class="dim">${t} ${ch} · ${pr}</td>
+        <td><span class="cfgpill">${cfgm} min</span></td>
+        <td><b>${booked}</b></td><td class="mut">${fh(H('booked'))}</td>
+        <td>${o.comp}</td><td class="mut">${fh(H('comp'))}</td>
+        <td>${o.ns}</td><td class="mut">${fh(H('ns'))}</td>
+        <td>${o.resch}</td><td class="mut">${fh(H('resch'))}</td>
+        <td>${o.canc}</td><td class="mut">${fh(H('canc'))}</td>
+        <td><b>${fpu(net)}</b></td><td><b>${fpu(gross)}</b></td>
+      </tr>`;
+    }).join('');
+    const totNet = blockH>0 ? totH.comp/blockH : null;
+    const totGross = blockH>0 ? (totH.comp+totH.ns)/blockH : null;
+    const tableHtml = `<div class="matrixcard"><table class="matrix">
+      <thead><tr><th class="dim">Metric</th><th>Config</th>
+      <th>Booked</th><th>Booked hrs</th><th>Completed</th><th>Completed hrs</th>
+      <th>No show</th><th>No show hrs</th><th>Resched</th><th>Resched hrs</th>
+      <th>Cancelled</th><th>Cancelled hrs</th><th>Net util</th><th>Gross util</th></tr></thead>
+      <tbody>${trs}
+      <tr class="subtotal"><td class="dim">Total</td><td></td>
+        <td><b>${totC.booked}</b></td><td>${fh(totH.booked)}</td>
+        <td>${totC.comp}</td><td>${fh(totH.comp)}</td>
+        <td>${totC.ns}</td><td>${fh(totH.ns)}</td>
+        <td>${totC.resch}</td><td>${fh(totH.resch)}</td>
+        <td>${totC.canc}</td><td>${fh(totH.canc)}</td>
+        <td><b>${fpu(totNet)}</b></td><td><b>${fpu(totGross)}</b></td></tr>
+      </tbody></table></div>`;
+    document.getElementById('content').innerHTML =
+      twoLevels(tableHtml) +
+      `<div class="cfgcard"><h3>How this tab computes</h3><div class="note">
+        Hours = count × that row's slot config ÷ 60. <b>Net utilization</b> = completed hours ÷ total block hours (${fh(blockH)}h in range).
+        <b>Gross utilization</b> = (completed + no-show hours) ÷ total block hours. No-show = booking updated after slot start without
+        completing (incl. late reschedules/cancellations); Rescheduled/Cancelled = released before start. Program: mental_health tag → MH,
+        everything else (incl. untagged) → SH. Booking channel = the appointment's mode.</div></div>`;
+    document.getElementById('exec').innerHTML =
+      `<b>Date:</b> <input type="date" id="uFrom" value="${uFrom}" style="font:inherit;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--page);color:var(--ink-1)">
+       – <input type="date" id="uTo" value="${uTo}" style="font:inherit;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--page);color:var(--ink-1)">
+       &nbsp;·&nbsp; <b>Total block hours:</b> ${fh(blockH)}h
+       &nbsp;·&nbsp; <b>Total net:</b> ${fpu(totNet)} &nbsp;·&nbsp; <b>Total gross:</b> ${fpu(totGross)}`;
+    const bind = id => document.getElementById(id).addEventListener('change', e=>{
+      if (id==='uFrom') uFrom = e.target.value; else uTo = e.target.value;
+      if (uFrom > uTo) { if (id==='uFrom') uTo = uFrom; else uFrom = uTo; }
+      renderTabU();
+    });
+    bind('uFrom'); bind('uTo');
+  }
+
   function render(){
-    ({'0':renderTab0,'1':renderTab1,'2':renderTab2,'3':renderTab3})[tab]();
+    document.getElementById('metricToggle').style.display = (tab==='u') ? 'none' : '';
+    ({'0':renderTab0,'1':renderTab1,'2':renderTab2,'3':renderTab3,'u':renderTabU})[tab]();
     document.getElementById('foot').innerHTML =
       `Definitions — <b>Offered</b>: total configured slots on the roster (after shrinkage). <b>Total Booked</b> = Completed + No Show + Rescheduled + Cancelled. ` +
       `<b>No Show</b> = booking updated after the slot start without completing (includes late reschedules/cancellations — the slot was burned). ` +
