@@ -144,7 +144,16 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
   const pmin = (t,p) => PMIN[`${t}|${p}`] ?? UNIT[t];
 
   // ---------- aggregation ----------
-  const STATUSES = { COMPLETED:'comp', MISSED:'ns', RESCHEDULED:'resch', CANCELLED:'canc' };
+  // No Show per business definition: booking touched AFTER the slot start
+  // (updated_at > start_time) and not completed — this catches late reschedules
+  // and late cancellations, which burned the slot exactly like a miss.
+  function classify(a){
+    if (a.status==='COMPLETED') return 'comp';
+    if (a.status==='MISSED' || a.uas===1) return 'ns';
+    if (a.status==='RESCHEDULED') return 'resch';
+    if (a.status==='CANCELLED') return 'canc';
+    return null;
+  }
   function offered(typ, channel){
     // channel is 3-way in the data: Offline-only / Online-only / Both (dual block).
     // Dual-block capacity is bookable either way, so it counts as offered in BOTH
@@ -163,7 +172,7 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
       if (a.typ!==typ) return;
       if (channel && a.channel!==channel) return;
       if (program && a.program!==program) return;
-      const k = STATUSES[a.status]; if (!k) return;
+      const k = classify(a); if (!k) return;
       o[k]+=a.n; o[k+'M']+=a.n*pmin(a.typ, a.program);
     });
     o.booked = o.comp+o.ns+o.resch+o.canc;
@@ -327,8 +336,9 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
     ({'1':renderTab1,'2':renderTab2,'3':renderTab3})[tab]();
     document.getElementById('foot').innerHTML =
       `Definitions — <b>Offered</b>: total configured slots on the roster (after shrinkage). <b>Total Booked</b> = Completed + No Show + Rescheduled + Cancelled. ` +
+      `<b>No Show</b> = booking updated after the slot start without completing (includes late reschedules/cancellations — the slot was burned). ` +
       `<b>Gross Utilization</b> = (Completed + No Show) ÷ Offered. <b>Net Utilization</b> = Completed ÷ Offered. ` +
-      `Rescheduled and cancelled bookings are reported but excluded from utilization (they released the slot). ` +
+      `Rescheduled and cancelled here mean released BEFORE the slot start (slot returned to the pool). ` +
       `Hour Level converts each metric via its program’s configured duration. ` +
       `Data: allo_prod roster_slots (corrected dedup) + appointments + consultation_type_configs · ${D.doctor} · ${D.day}. ` +
       `Refresh: <code>python3 fetch_prototype_data.py [provider_id] [day]</code>.`;

@@ -121,13 +121,15 @@ Q_APPTS = f"""SELECT
        CASE WHEN t.code='SC' THEN 'SC' ELSE 'RPT' END AS typ,
        CASE WHEN a.mode='offline' THEN 'Offline' ELSE 'Online' END AS channel,
        COALESCE(a.program,'unattributed') AS program,
-       a.status, COUNT(*) AS n
+       a.status,
+       CASE WHEN a.updated_at > a.start_time THEN 1 ELSE 0 END AS uas,
+       COUNT(*) AS n
 FROM allo_consultations.appointments a
 JOIN allo_consultations.types t ON a.type_id=t.id
 WHERE a.provider_id='{PROVIDER}' AND a.deleted_at IS NULL
   AND t.code IN ('SC','FU','RR','PQ')
   AND CAST(DATEADD(minute,330,a.start_time) AS DATE) = '{DAY}'
-GROUP BY 1,2,3,4 ORDER BY 1,2,3,4"""
+GROUP BY 1,2,3,4,5 ORDER BY 1,2,3,4,5"""
 
 
 def main():
@@ -135,7 +137,7 @@ def main():
     configs = [{"type": r[0], "program": r[1], "mins": r[2]} for r in run_query(Q_CONFIGS, "configs")]
     slots = [{"typ": r[0], "channel": r[1], "dur": r[2], "slots": r[3], "booked": r[4]}
              for r in run_query(Q_SLOTS, "slots")]
-    appts = [{"typ": r[0], "channel": r[1], "program": r[2], "status": r[3], "n": r[4]}
+    appts = [{"typ": r[0], "channel": r[1], "program": r[2], "status": r[3], "uas": r[4], "n": r[5]}
              for r in run_query(Q_APPTS, "appointments")]
     payload = {
         "updated": datetime.now().strftime("%Y-%m-%d %H:%M IST"),
