@@ -82,6 +82,18 @@ WHERE b.provider_id='{PROVIDER}' AND b.deleted_at IS NULL AND b.is_bookable=1
   AND DATEADD(minute,330,b.start_time) >= DATEADD(day,-60,CURRENT_DATE)
 GROUP BY 1 ORDER BY 1"""
 
+Q_CAP = f"""SELECT CAST(DATEADD(minute,330,b.start_time) AS DATE) AS dt,
+  CASE WHEN t.code='SC' THEN 'SC' ELSE 'RPT' END AS typ,
+  MAX(CASE WHEN abtm.offline_location_id IS NOT NULL THEN 1 ELSE 0 END) AS has_off,
+  MAX(CASE WHEN abtm.online_location_id IS NOT NULL THEN 1 ELSE 0 END) AS has_on
+FROM allo_consultations.appointment_blocks b
+JOIN allo_consultations.appointment_block_type_maps abtm
+  ON abtm.appointment_block_id=b.id AND abtm.deleted_at IS NULL
+JOIN allo_consultations.types t ON abtm.consultation_type_id=t.id AND t.code IN ('SC','FU','RR','PQ')
+WHERE b.provider_id='{PROVIDER}' AND b.deleted_at IS NULL AND b.is_bookable=1
+  AND DATEADD(minute,330,b.start_time) >= DATEADD(day,-60,CURRENT_DATE)
+GROUP BY 1,2 ORDER BY 1,2"""
+
 Q_APPTS = f"""SELECT CAST(DATEADD(minute,330,a.start_time) AS DATE) AS dt,
        CASE WHEN t.code='SC' THEN 'SC' ELSE 'RPT' END AS typ,
        CASE WHEN a.mode='offline' THEN 'Offline' ELSE 'Online' END AS channel,
@@ -103,6 +115,8 @@ def main():
     blocks = [{"dt": str(r[0])[:10], "mins": r[1]} for r in run_query(Q_BLOCKS, "blocks")]
     appts = [{"dt": str(r[0])[:10], "typ": r[1], "channel": r[2], "program": r[3],
               "status": r[4], "uas": r[5], "n": r[6]} for r in run_query(Q_APPTS, "appointments")]
+    caps = [{"dt": str(r[0])[:10], "typ": r[1], "off": r[2], "on": r[3]}
+            for r in run_query(Q_CAP, "capability")]
     payload = {
         "updated": datetime.now().strftime("%Y-%m-%d %H:%M IST"),
         "doctor": doctor,
@@ -110,6 +124,7 @@ def main():
         "configs": configs,
         "blocks": blocks,
         "appts": appts,
+        "caps": caps,
     }
     out = HERE / "data_utilz.js"
     out.write_text("window.UTILZ_DATA = " + json.dumps(payload, separators=(",", ":")) + ";\n")

@@ -427,6 +427,7 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
     const fh = v => (Math.round(v*100)/100).toFixed(2);
     const fpu = v => v==null?'–':(v*100).toFixed(1)+'%';
     let totC={comp:0,ns:0,resch:0,canc:0,booked:0}, totH={comp:0,ns:0,resch:0,canc:0,booked:0};
+    const capable = (t,ch) => (U.caps||[]).some(c=>inR(c.dt) && c.typ===t && (ch==='Offline'?c.off===1:c.on===1));
     const trs = ROWS.map(([t,ch,pr])=>{
       const cfgm = CFGU[`${t}|${pr}`];
       const o={comp:0,ns:0,resch:0,canc:0};
@@ -440,6 +441,12 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
       ['comp','ns','resch','canc'].forEach(k=>{ totC[k]+=o[k]; totH[k]+=H(k); });
       const net = blockH>0 ? H('comp')/blockH : null;
       const gross = blockH>0 ? (H('comp')+H('ns'))/blockH : null;
+      if (booked===0 && !capable(t,ch)){
+        const span = uShowCounts ? 12 : 7;
+        return `<tr><td class="dim">${t} ${ch} · ${pr}</td>
+          <td><span class="cfgpill">${cfgm} min</span></td>
+          <td colspan="${span}" style="text-align:left;color:var(--ink-3)">Not offered — no roster blocks map ${t} to ${ch.toLowerCase()} in this date range</td></tr>`;
+      }
       const cnt = v => uShowCounts ? `<td>${v}</td>` : '';
       return `<tr>
         <td class="dim">${t} ${ch} · ${pr}</td>
