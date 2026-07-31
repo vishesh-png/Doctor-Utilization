@@ -243,14 +243,18 @@ footer { color:var(--ink-3); font-size:11px; margin-top:22px; line-height:1.5; }
     const rows = [];
     ['SC','RPT'].forEach(t=>{
       CHANNELS.forEach((ch,ci)=>{
+        const pool = offered(t,ch);
         PROGRAMS.forEach(([p,pn],pi)=>{
+          // shared pool expressed in THIS program's slot size:
+          // 300 shared minutes = 30 SH slots (10m) but only 10 MH slots (30m)
+          const progOff = { u: Math.round(pool.m / pmin(t,p) * 10)/10, m: pool.m };
           rows.push({
             dims:[
               (ci===0 && pi===0) ? {label:t, sub:TYPE_SUB[t], span:CHANNELS.length*(PROGRAMS.length+1)} : null,
               pi===0 ? {label:ch, span:PROGRAMS.length+1} : null,
               {label:pn}
             ],
-            off:offered(t,ch), o:outcomes(t,ch,p), cfg:pmin(t,p), shared:true
+            off:progOff, o:outcomes(t,ch,p), cfg:pmin(t,p), shared:true
           });
         });
         rows.push({
@@ -265,9 +269,11 @@ footer { color:var(--ink-3); font-size:11px; margin-top:22px; line-height:1.5; }
                ['SC · Unattributed',PMIN['SC|unattributed']],
                ['RPT · Sexual Health',PMIN['RPT|sexual_health']],['RPT (FU) · Mental Health',PMIN['RPT|mental_health']],
                ['RPT · Unattributed',PMIN['RPT|unattributed']]],
-        '* Unattributed = bookings with no program tag (counted, never dropped; their slot length matches the Sexual Health config). ' +
-        'Slot capacity carries no program tag, so <b>Offered is the type × channel shared pool</b> (marked *), repeated on each program row; ' +
-        'each program’s utilization is its contribution to that pool — the three programs add up to the “All programs” subtotal row.');
+        '* The roster is ONE shared pool of minutes per type × channel — capacity carries no program tag. Each program row shows that pool ' +
+        'expressed in <b>its own slot size</b>: e.g. 300 shared SC minutes = 30 Sexual-Health slots (10 min) but only 10 Mental-Health slots (30 min). ' +
+        'Utilization on a program row = that program’s bookings ÷ what the pool could hold at its slot size — equivalently, its share of pool time. ' +
+        'The “All programs” subtotal row counts the pool in base units. Unattributed = bookings with no program tag (counted, never dropped; ' +
+        'slot length matches the Sexual Health config).');
     const mh = outcomes('SC',null,'mental_health'), un = outcomes('SC',null,'unattributed');
     document.getElementById('exec').innerHTML =
       `<b>Program lens:</b> Mental Health took ${fmtN(isHour()?mh.bookedM:mh.booked)} of SC bookings and Unattributed ${fmtN(isHour()?un.bookedM:un.booked)} — ` +
