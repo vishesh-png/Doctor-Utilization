@@ -104,9 +104,10 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
 
   <div class="controls">
     <div class="tabs" id="tabs">
-      <button data-t="1" class="on">1 · Overall — SC vs RPT</button>
-      <button data-t="2">2 · Online / Offline Split</button>
-      <button data-t="3">3 · Program Split</button>
+      <button data-t="0" class="on">1 · Total Utilization</button>
+      <button data-t="1">2 · Overall — SC vs RPT</button>
+      <button data-t="2">3 · Online / Offline Split</button>
+      <button data-t="3">4 · Program Split</button>
     </div>
     <div class="toggle" id="metricToggle">
       <button data-m="slot" class="on">Slot Level</button>
@@ -169,7 +170,7 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
   function outcomes(typ, channel, program){
     const o = {comp:0,ns:0,resch:0,canc:0, compM:0,nsM:0,reschM:0,cancM:0};
     D.appts.forEach(a=>{
-      if (a.typ!==typ) return;
+      if (typ && a.typ!==typ) return;
       if (channel && a.channel!==channel) return;
       if (program && a.program!==program) return;
       const k = classify(a); if (!k) return;
@@ -181,7 +182,7 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
   }
 
   // ---------- rendering ----------
-  let tab='1', metric='slot';
+  let tab='0', metric='slot';
   const isHour = () => metric==='hour';
   const fmtN = v => isHour() ? (v/60).toFixed(1)+'h' : String(v);
   const fp = v => v==null?'–':(v*100).toFixed(1)+'%';
@@ -235,6 +236,27 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
   const PROGRAMS = [['sexual_health','Sexual Health'],['mental_health','Mental Health'],['unattributed','Unattributed']];
   const CHANNELS = ['Offline','Online'];
   const TYPE_SUB = { SC:'Screening Calls', RPT:'FU · RR · PQ' };
+
+  function renderTab0(){
+    const off = { u: offered('SC').u + offered('RPT').u, m: offered('SC').m + offered('RPT').m };
+    const o = outcomes(null);
+    const rows = [{
+      dims:[{label:'Full day — all consults', sub:'SC + FU + RR + PQ, both channels'}],
+      off, o, cfg:`${UNIT.SC} / ${UNIT.RPT}`
+    }];
+    document.getElementById('content').innerHTML =
+      twoLevels(matrix(['Scope'], rows)) +
+      cfgCard([['SC slot unit',UNIT.SC],['RPT slot unit',UNIT.RPT],
+               ['SC · Mental Health booking',PMIN['SC|mental_health']],['FU · Mental Health booking',PMIN['RPT|mental_health']]],
+        'Slot Level mixes 10-min SC units and 5-min repeat units in one count — Hour Level is the cleaner single number for the full-day picture.');
+    const offV = isHour() ? off.m : off.u;
+    const v = k => isHour() ? o[k+'M'] : o[k];
+    document.getElementById('exec').innerHTML =
+      `<b>${fmtDay.split(',')[0]} — the whole day in one line:</b> ${fmtN(offV)} ${isHour()?'':'slots '}offered, ` +
+      `${fmtN(v('booked'))} booked, ${fmtN(v('comp'))} completed, ${fmtN(v('ns'))} no-shows, ` +
+      `${fmtN(v('resch'))} rescheduled, ${fmtN(v('canc'))} cancelled → ` +
+      `<b>${fp(pctv(v('comp')+v('ns'), offV))} gross</b> / <b>${fp(pctv(v('comp'), offV))} net</b> utilization.`;
+  }
 
   function renderTab1(){
     const rows = ['SC','RPT'].map(t=>({
@@ -340,7 +362,7 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
   }
 
   function render(){
-    ({'1':renderTab1,'2':renderTab2,'3':renderTab3})[tab]();
+    ({'0':renderTab0,'1':renderTab1,'2':renderTab2,'3':renderTab3})[tab]();
     document.getElementById('foot').innerHTML =
       `Definitions — <b>Offered</b>: total configured slots on the roster (after shrinkage). <b>Total Booked</b> = Completed + No Show + Rescheduled + Cancelled. ` +
       `<b>No Show</b> = booking updated after the slot start without completing (includes late reschedules/cancellations — the slot was burned). ` +
