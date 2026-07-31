@@ -83,8 +83,9 @@ WHERE c.deleted_at IS NULL AND t.code IN ('SC','FU','RR','PQ')
   AND c.provider_id='{PROVIDER}'
 ORDER BY 1,2"""
 
-# one row per physical window (dedup across locations); channel is 3-way from the
-# BLOCK's mappings: Offline (offline-only) / Online (online-only) / Both (dual)
+# one row per physical window (dedup across locations); channel is 3-way and
+# PER CONSULTATION TYPE from the block's type maps: a block can offer SC offline-only
+# while offering repeats offline+online (e.g. Dr. Sandhiya's clinic days)
 Q_SLOTS = f"""SELECT typ, channel, dur, COUNT(*) AS slots, SUM(booked) AS booked
 FROM (
   SELECT typ, start_time, channel, dur, booked,
@@ -98,11 +99,11 @@ FROM (
            DATEDIFF(minute,rs.start_time,rs.end_time) AS dur,
            rs.is_booked AS booked
     FROM allo_consultations.roster_slots rs
-    JOIN (SELECT appointment_block_id,
+    JOIN (SELECT appointment_block_id, consultation_type_id,
                  MAX(CASE WHEN offline_location_id IS NOT NULL THEN 1 ELSE 0 END) AS has_off,
                  MAX(CASE WHEN online_location_id IS NOT NULL THEN 1 ELSE 0 END) AS has_on
           FROM allo_consultations.appointment_block_type_maps WHERE deleted_at IS NULL
-          GROUP BY 1) bc ON rs.block_id=bc.appointment_block_id
+          GROUP BY 1,2) bc ON rs.block_id=bc.appointment_block_id AND rs.type_id=bc.consultation_type_id
     JOIN (SELECT DISTINCT appointment_block_id, COALESCE(offline_location_id, online_location_id) AS bl
           FROM allo_consultations.appointment_block_type_maps WHERE deleted_at IS NULL) abtm
       ON rs.block_id=abtm.appointment_block_id AND abtm.bl=rs.location_id
