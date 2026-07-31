@@ -239,17 +239,18 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
       let cut = '';
       try {
         const c = JSON.parse(w.cutoffs || '[]')[0];
-        if (c && c.locationType) cut = ` · ${c.locationType} bookable only until ${c.cutoffMins/60}h before`;
+        if (c && c.locationType) cut = ` · ${c.locationType} booking opens ${c.cutoffMins/60}h before the window`;
         else if (c && c.slotCategory) cut = ` · reserved for ${c.slotCategory}`;
       } catch(e){}
       const kind = w.kind==='online' ? 'Online-preferred' : (w.kind==='repeat' ? 'Repeat-preferred' : w.kind);
       return `<div class="cfgchip">${kind} · <b>${w.start}–${w.end}</b>${cut}</div>`;
     }).join('');
     return `<div class="cfgcard"><h3>Preferred hours (this day)</h3><div class="cfgrow">${chips}</div>
-      <div class="note">Online-preferred windows steer CHANNEL only: those slots are always bookable online, while offline booking
-      for them closes at the cutoff before the window (early-bird only). They do not reserve capacity for any consult type.
-      Repeat capacity is separate: booked repeat slots + whatever the roster's repeat boundary opens to repeats — dedicated
-      repeat windows when configured, plus near-term freed slots (reschedules/cancellations) the system re-opens to repeats.</div></div>`;
+      <div class="note">Online-preferred windows steer CHANNEL only: those slots are bookable online at ANY time, while offline
+      booking for them opens only at the cutoff before the window (e.g. an 8h cutoff on a 12:00 window ⇒ offline can book it
+      from 04:00 onward) — a near-time fallback so unsold online slots don't go to waste. They do not reserve capacity for any
+      consult type. Repeat capacity is separate: booked repeat slots + whatever the roster's repeat boundary opens to repeats —
+      dedicated repeat windows when configured, plus near-term freed slots (reschedules/cancellations) the system re-opens.</div></div>`;
   }
   const cfgCard = (chips, extra) => `<div class="cfgcard"><h3>Slot configuration</h3>
       <div class="cfgrow">${chips.map(([l,v])=>`<div class="cfgchip">${l} · <b>${v} min</b></div>`).join('')}</div>
@@ -308,7 +309,7 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
         rows.push({
           dims:[ i===0 ? {label:t, sub:TYPE_SUB[t], span:CHANNELS.length} : null, {label:ch} ],
           off, o:outcomes(t,ch), cfg:UNIT[t], shared: off.du>0,
-          offNote: w>0 ? (ch==='Offline' ? `incl. ${fmtN(w)} early-bird only` : `incl. ${fmtN(w)} online-preferred`) : null
+          offNote: w>0 ? (ch==='Offline' ? `incl. ${fmtN(w)} offline only near window (cutoff)` : `incl. ${fmtN(w)} online-preferred`) : null
         });
       });
     });
@@ -319,7 +320,7 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
         'Slot configuration does not vary by channel. A booking’s channel is the appointment’s mode; slot capacity’s channel comes from the roster block’s ' +
         'location mappings, PER TYPE — a block can offer SC offline-only while offering repeats offline+online. Types a doctor never maps to a channel ' +
         'show as “Not offered”. * = dual-mapped capacity: the SAME physical slots appear under both channel rows because they were bookable either way — never add Offline + Online offered together. ' +
-        '“Early-bird only” = slots in an online-preferred window whose offline booking closed at the cutoff before the window.') +
+        '“Offline only near window” = slots in an online-preferred window: online could book them anytime, offline only from the cutoff onward (e.g. last 8h).') +
       pscCard();
     const so=offered('SC','Offline'), sn=offered('SC','Online');
     document.getElementById('exec').innerHTML =
@@ -373,7 +374,7 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
         rows.push({
           dims:[null, null, {label:'All programs'}],
           off:offCh, o:outcomes(t,ch), cfg:UNIT[t], cls:'subtotal',
-          offNote: wCh>0 ? (ch==='Offline' ? `incl. ${fmtN(wCh)} early-bird only` : `incl. ${fmtN(wCh)} online-preferred`) : null
+          offNote: wCh>0 ? (ch==='Offline' ? `incl. ${fmtN(wCh)} offline only near window (cutoff)` : `incl. ${fmtN(wCh)} online-preferred`) : null
         });
       });
     });
