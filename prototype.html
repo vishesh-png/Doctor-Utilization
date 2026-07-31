@@ -182,7 +182,7 @@ footer { color:var(--ink-3); font-size:11px; margin-top:22px; line-height:1.5; }
         <td class="mut">${fmtN(val('ns'))}</td>
         <td class="mut">${fmtN(val('resch'))}</td>
         <td class="mut">${fmtN(val('canc'))}</td>
-        <td>${bar(pctv(val('booked'), offV),'var(--acc)')}</td>
+        <td>${bar(pctv(val('comp')+val('ns'), offV),'var(--acc)')}</td>
         <td>${bar(pctv(val('comp'), offV),'var(--net)')}</td>
         <td><span class="cfgpill">${r.cfg} min</span></td>
       </tr>`;
@@ -213,8 +213,8 @@ footer { color:var(--ink-3); font-size:11px; margin-top:22px; line-height:1.5; }
         'The roster grid is cut in the base unit sizes; a Mental Health booking spans multiple consecutive units, which is why hour-level utilization can differ from slot-level.');
     const sc = outcomes('SC'), so = offered('SC'), rp = outcomes('RPT'), ro = offered('RPT');
     document.getElementById('exec').innerHTML =
-      `<b>${fmtDay.split(',')[0]}:</b> SC ran at <b>${fp(pctv(isHour()?sc.bookedM:sc.booked, isHour()?so.m:so.u))} gross</b> / ${fp(pctv(isHour()?sc.compM:sc.comp, isHour()?so.m:so.u))} net on ${fmtN(isHour()?so.m:so.u)} ${isHour()?'offered':'slots'}; ` +
-      `RPT at <b>${fp(pctv(isHour()?rp.bookedM:rp.booked, isHour()?ro.m:ro.u))} gross</b> / ${fp(pctv(isHour()?rp.compM:rp.comp, isHour()?ro.m:ro.u))} net on ${fmtN(isHour()?ro.m:ro.u)}. ` +
+      `<b>${fmtDay.split(',')[0]}:</b> SC ran at <b>${fp(pctv(isHour()?sc.compM+sc.nsM:sc.comp+sc.ns, isHour()?so.m:so.u))} gross</b> / ${fp(pctv(isHour()?sc.compM:sc.comp, isHour()?so.m:so.u))} net on ${fmtN(isHour()?so.m:so.u)} ${isHour()?'offered':'slots'}; ` +
+      `RPT at <b>${fp(pctv(isHour()?rp.compM+rp.nsM:rp.comp+rp.ns, isHour()?ro.m:ro.u))} gross</b> / ${fp(pctv(isHour()?rp.compM:rp.comp, isHour()?ro.m:ro.u))} net on ${fmtN(isHour()?ro.m:ro.u)}. ` +
       `Reschedules (${sc.resch+rp.resch}) are the largest leak between gross and net.`;
   }
 
@@ -284,8 +284,8 @@ footer { color:var(--ink-3); font-size:11px; margin-top:22px; line-height:1.5; }
     ({'1':renderTab1,'2':renderTab2,'3':renderTab3})[tab]();
     document.getElementById('foot').innerHTML =
       `Definitions — <b>Offered</b>: total configured slots on the roster (after shrinkage). <b>Total Booked</b> = Completed + No Show + Rescheduled + Cancelled. ` +
-      `<b>Gross Utilization</b> = Total Booked ÷ Offered. <b>Net Utilization</b> = Completed ÷ Offered. ` +
-      `Gross can exceed 100% when released slots (reschedules/cancellations) were re-booked. ` +
+      `<b>Gross Utilization</b> = (Completed + No Show) ÷ Offered. <b>Net Utilization</b> = Completed ÷ Offered. ` +
+      `Rescheduled and cancelled bookings are reported but excluded from utilization (they released the slot). ` +
       `Hour Level converts each metric via its program’s configured duration. ` +
       `Data: allo_prod roster_slots (corrected dedup) + appointments + consultation_type_configs · ${D.doctor} · ${D.day}. ` +
       `Refresh: <code>python3 fetch_prototype_data.py [provider_id] [day]</code>.`;
