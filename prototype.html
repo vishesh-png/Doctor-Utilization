@@ -246,9 +246,10 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
       return `<div class="cfgchip">${kind} · <b>${w.start}–${w.end}</b>${cut}</div>`;
     }).join('');
     return `<div class="cfgcard"><h3>Preferred hours (this day)</h3><div class="cfgrow">${chips}</div>
-      <div class="note">Slots inside an online-preferred window are always bookable online; offline booking for them closes at the
-      cutoff before the window (early-bird only). Repeat-preferred windows reserve capacity for repeat consults — the SC vs RPT
-      offered split already honours them via the roster's boundary flags.</div></div>`;
+      <div class="note">Online-preferred windows steer CHANNEL only: those slots are always bookable online, while offline booking
+      for them closes at the cutoff before the window (early-bird only). They do not reserve capacity for any consult type.
+      Repeat capacity is separate: booked repeat slots + whatever the roster's repeat boundary opens to repeats — dedicated
+      repeat windows when configured, plus near-term freed slots (reschedules/cancellations) the system re-opens to repeats.</div></div>`;
   }
   const cfgCard = (chips, extra) => `<div class="cfgcard"><h3>Slot configuration</h3>
       <div class="cfgrow">${chips.map(([l,v])=>`<div class="cfgchip">${l} · <b>${v} min</b></div>`).join('')}</div>
