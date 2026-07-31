@@ -34,7 +34,7 @@ header .sub a { color:var(--acc); text-decoration:none; }
   text-transform:uppercase; color:var(--acc); border:1px solid var(--acc);
   border-radius:5px; padding:1px 7px; vertical-align:2px; margin-left:8px; }
 .controls { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin:18px 0 6px;
-  border-bottom:1px solid var(--axis); padding-bottom:0; }
+  border-bottom:1px solid var(--axis); }
 .tabs { display:flex; gap:2px; }
 .tabs button { font:inherit; font-size:13.5px; font-weight:600; border:0; background:transparent;
   color:var(--ink-3); padding:9px 14px; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
@@ -52,24 +52,24 @@ header .sub a { color:var(--acc); text-decoration:none; }
 .band h2 { font-size:12px; margin:0; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-3); }
 .band .line { flex:1; height:1px; background:var(--grid); }
 .band .tag { font-size:11px; color:var(--ink-3); }
-.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(268px,1fr)); gap:12px; }
-.sec { background:var(--surface-1); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
-.sec h3 { font-size:13px; margin:0 0 10px; display:flex; align-items:center; gap:8px; }
-.sec h3 .cfg { margin-left:auto; font-size:10px; font-weight:600; color:var(--ink-3);
-  background:var(--track); border-radius:5px; padding:2px 6px; }
-.hero { display:flex; align-items:baseline; gap:8px; margin-bottom:10px; }
-.hero .v { font-size:26px; font-weight:700; }
-.hero .l { font-size:11px; color:var(--ink-3); }
-.utilrow { margin:7px 0; }
-.utilrow .lbl { display:flex; justify-content:space-between; font-size:11.5px; color:var(--ink-2); margin-bottom:3px; }
-.utilrow .lbl b { color:var(--ink-1); font-size:12.5px; }
-.ubar { height:6px; background:var(--track); border-radius:3px; overflow:hidden; }
+.matrixcard { background:var(--surface-1); border:1px solid var(--border); border-radius:10px;
+  padding:6px 14px 12px; overflow-x:auto; }
+table.matrix { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; font-size:13px; }
+.matrix th { font-size:10px; color:var(--ink-3); font-weight:600; text-transform:uppercase;
+  letter-spacing:.03em; border-bottom:1px solid var(--axis); padding:9px 10px; text-align:right; white-space:nowrap; }
+.matrix th.dim { text-align:left; }
+.matrix td { padding:8px 10px; text-align:right; border-bottom:1px solid var(--grid); white-space:nowrap; }
+.matrix td.dim { text-align:left; font-weight:650; color:var(--ink-1); vertical-align:middle; }
+.matrix td.dim.grp { border-right:1px solid var(--grid); background:var(--page); }
+.matrix td.dim .sub { display:block; font-size:10.5px; font-weight:500; color:var(--ink-3); }
+.matrix td .big { font-weight:700; font-size:14px; }
+.matrix td.mut { color:var(--ink-2); }
+.matrix tr.subtotal td { background:var(--page); font-weight:650; border-top:1px solid var(--axis); }
+.matrix tr.subtotal td.dim { color:var(--ink-2); font-size:12px; }
+.utilcell { display:inline-flex; align-items:center; gap:8px; justify-content:flex-end; min-width:110px; }
+.ubar { width:52px; height:6px; background:var(--track); border-radius:3px; overflow:hidden; flex:none; }
 .ubar i { display:block; height:100%; border-radius:3px; }
-.mrows { margin-top:10px; border-top:1px solid var(--grid); }
-.mrow { display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid var(--grid);
-  font-size:12.5px; color:var(--ink-2); font-variant-numeric:tabular-nums; }
-.mrow b { color:var(--ink-1); font-weight:650; }
-.mrow.emph { font-size:13px; }
+.cfgpill { font-size:10.5px; color:var(--ink-3); background:var(--track); border-radius:5px; padding:2px 7px; }
 .cfgcard { background:var(--surface-1); border:1px solid var(--border); border-radius:10px;
   padding:14px 16px; margin-top:14px; }
 .cfgcard h3 { font-size:12px; margin:0 0 8px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-3); }
@@ -134,12 +134,12 @@ footer { color:var(--ink-3); font-size:11px; margin-top:22px; line-height:1.5; }
 
   // ---------- aggregation ----------
   const STATUSES = { COMPLETED:'comp', MISSED:'ns', RESCHEDULED:'resch', CANCELLED:'canc' };
-  function offered(typ, channel){       // units + minutes
+  function offered(typ, channel){
     let u=0, m=0;
     D.slots.forEach(s=>{ if (s.typ===typ && (!channel || s.channel===channel)){ u+=s.slots; m+=s.slots*s.dur; } });
     return {u, m};
   }
-  function outcomes(typ, channel, program){  // counts + minutes by his 4 statuses
+  function outcomes(typ, channel, program){
     const o = {comp:0,ns:0,resch:0,canc:0, compM:0,nsM:0,reschM:0,cancM:0};
     D.appts.forEach(a=>{
       if (a.typ!==typ) return;
@@ -160,86 +160,114 @@ footer { color:var(--ink-3); font-size:11px; margin-top:22px; line-height:1.5; }
   const fp = v => v==null?'–':(v*100).toFixed(1)+'%';
   const pctv = (n,d) => d>0 ? n/d : null;
 
-  function secCard(title, off, o, cfgMins, shared){
-    // choose count- or hour-basis
-    const offV = isHour() ? off.m : off.u;
-    const val = k => isHour() ? o[k+'M'] : o[k];
-    const gross = pctv(val('booked'), offV);
-    const net = pctv(val('comp'), offV);
-    const bar = (v,color)=>`<div class="ubar"><i style="width:${Math.min(100,(v||0)*100)}%;background:${color}"></i></div>`;
-    return `<div class="sec">
-      <h3>${title}<span class="cfg">config ${cfgMins}</span></h3>
-      <div class="hero"><span class="v">${fmtN(offV)}</span>
-        <span class="l">${isHour()?'hours offered':'slots offered'}${shared?' · shared pool':''}</span></div>
-      <div class="utilrow"><div class="lbl"><span>Gross utilization <span class="muted">(booked ÷ offered)</span></span><b>${fp(gross)}</b></div>${bar(gross,'var(--acc)')}</div>
-      <div class="utilrow"><div class="lbl"><span>Net utilization <span class="muted">(completed ÷ offered)</span></span><b>${fp(net)}</b></div>${bar(net,'var(--net)')}</div>
-      <div class="mrows">
-        <div class="mrow emph"><span>Total booked</span><b>${fmtN(val('booked'))}</b></div>
-        <div class="mrow"><span>Completed</span><b>${fmtN(val('comp'))}</b></div>
-        <div class="mrow"><span>No show</span><b>${fmtN(val('ns'))}</b></div>
-        <div class="mrow"><span>Rescheduled</span><b>${fmtN(val('resch'))}</b></div>
-        <div class="mrow"><span>Cancelled</span><b>${fmtN(val('canc'))}</b></div>
-      </div>
-    </div>`;
+  // a matrix row: dims = array of {label, sub?, span?} or null (covered by rowspan above)
+  function matrix(dimHeaders, rows){
+    const head = `<tr>${dimHeaders.map(h=>`<th class="dim">${h}</th>`).join('')}
+      <th>Offered</th><th>Total Booked</th><th>Completed</th><th>No Show</th>
+      <th>Rescheduled</th><th>Cancelled</th><th>Gross Util</th><th>Net Util</th><th>Config</th></tr>`;
+    const bar = (v,color)=>`<span class="utilcell"><span class="ubar"><i style="width:${Math.min(100,(v||0)*100)}%;background:${color}"></i></span>${fp(v)}</span>`;
+    const body = rows.map(r=>{
+      const offV = isHour() ? r.off.m : r.off.u;
+      const val = k => isHour() ? r.o[k+'M'] : r.o[k];
+      const dims = r.dims.map(d=>{
+        if (d===null) return '';
+        const span = d.span ? ` rowspan="${d.span}"` : '';
+        const grp = d.span && d.span>1 ? ' grp' : '';
+        return `<td class="dim${grp}"${span}>${d.label}${d.sub?`<span class="sub">${d.sub}</span>`:''}</td>`;
+      }).join('');
+      return `<tr class="${r.cls||''}">${dims}
+        <td><span class="big">${fmtN(offV)}</span>${r.shared?' <span class="muted">*</span>':''}</td>
+        <td><b>${fmtN(val('booked'))}</b></td>
+        <td class="mut">${fmtN(val('comp'))}</td>
+        <td class="mut">${fmtN(val('ns'))}</td>
+        <td class="mut">${fmtN(val('resch'))}</td>
+        <td class="mut">${fmtN(val('canc'))}</td>
+        <td>${bar(pctv(val('booked'), offV),'var(--acc)')}</td>
+        <td>${bar(pctv(val('comp'), offV),'var(--net)')}</td>
+        <td><span class="cfgpill">${r.cfg} min</span></td>
+      </tr>`;
+    }).join('');
+    return `<div class="matrixcard"><table class="matrix"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
   }
+
   const band = (label, tag) => `<div class="band"><h2>${label}</h2><div class="line"></div><span class="tag">${tag||''}</span></div>`;
-  function twoLevels(gridHtml){
-    return band('Company / Overall level', 'all doctors — 1 in this prototype') +
-      `<div class="grid">${gridHtml}</div>` +
-      band(`Doctor level — ${D.doctor}`, 'identical to company level by construction') +
-      `<div class="grid">${gridHtml}</div>`;
-  }
-  function cfgCard(chips, extra){
-    return `<div class="cfgcard"><h3>Slot configuration</h3>
+  const twoLevels = html =>
+    band('Company / Overall level', 'all doctors — 1 in this prototype') + html +
+    band(`Doctor level — ${D.doctor}`, 'identical to company level by construction') + html;
+  const cfgCard = (chips, extra) => `<div class="cfgcard"><h3>Slot configuration</h3>
       <div class="cfgrow">${chips.map(([l,v])=>`<div class="cfgchip">${l} · <b>${v} min</b></div>`).join('')}</div>
       ${extra?`<div class="note">${extra}</div>`:''}</div>`;
-  }
 
   const PROGRAMS = [['sexual_health','Sexual Health'],['mental_health','Mental Health'],['unattributed','Unattributed']];
   const CHANNELS = ['Offline','Online'];
+  const TYPE_SUB = { SC:'Screening Calls', RPT:'FU · RR · PQ' };
 
   function renderTab1(){
-    const html =
-      secCard('SC — Screening Calls', offered('SC'), outcomes('SC'), UNIT.SC) +
-      secCard('RPT — Repeats (FU · RR · PQ)', offered('RPT'), outcomes('RPT'), UNIT.RPT);
-    document.getElementById('content').innerHTML = twoLevels(html) +
+    const rows = ['SC','RPT'].map(t=>({
+      dims:[{label:t, sub:TYPE_SUB[t]}], off:offered(t), o:outcomes(t), cfg:UNIT[t]
+    }));
+    document.getElementById('content').innerHTML =
+      twoLevels(matrix(['Type'], rows)) +
       cfgCard([['SC slot unit',UNIT.SC],['RPT slot unit',UNIT.RPT],
                ['SC · Mental Health booking',PMIN['SC|mental_health']],['FU · Mental Health booking',PMIN['RPT|mental_health']]],
         'The roster grid is cut in the base unit sizes; a Mental Health booking spans multiple consecutive units, which is why hour-level utilization can differ from slot-level.');
     const sc = outcomes('SC'), so = offered('SC'), rp = outcomes('RPT'), ro = offered('RPT');
     document.getElementById('exec').innerHTML =
-      `<b>${fmtDay.split(',')[0]}:</b> SC ran at <b>${fp(pctv(isHour()?sc.bookedM:sc.booked, isHour()?so.m:so.u))} gross</b> / ${fp(pctv(isHour()?sc.compM:sc.comp, isHour()?so.m:so.u))} net on ${fmtN(isHour()?so.m:so.u)} ${isHour()?'hours':'slots'}; ` +
+      `<b>${fmtDay.split(',')[0]}:</b> SC ran at <b>${fp(pctv(isHour()?sc.bookedM:sc.booked, isHour()?so.m:so.u))} gross</b> / ${fp(pctv(isHour()?sc.compM:sc.comp, isHour()?so.m:so.u))} net on ${fmtN(isHour()?so.m:so.u)} ${isHour()?'offered':'slots'}; ` +
       `RPT at <b>${fp(pctv(isHour()?rp.bookedM:rp.booked, isHour()?ro.m:ro.u))} gross</b> / ${fp(pctv(isHour()?rp.compM:rp.comp, isHour()?ro.m:ro.u))} net on ${fmtN(isHour()?ro.m:ro.u)}. ` +
       `Reschedules (${sc.resch+rp.resch}) are the largest leak between gross and net.`;
   }
 
   function renderTab2(){
-    let html='';
-    ['SC','RPT'].forEach(t=>CHANNELS.forEach(ch=>{
-      html += secCard(`${t} · ${ch}`, offered(t,ch), outcomes(t,ch), UNIT[t]);
-    }));
-    document.getElementById('content').innerHTML = twoLevels(html) +
+    const rows = [];
+    ['SC','RPT'].forEach(t=>{
+      CHANNELS.forEach((ch,i)=>{
+        rows.push({
+          dims:[ i===0 ? {label:t, sub:TYPE_SUB[t], span:CHANNELS.length} : null, {label:ch} ],
+          off:offered(t,ch), o:outcomes(t,ch), cfg:UNIT[t]
+        });
+      });
+    });
+    document.getElementById('content').innerHTML =
+      twoLevels(matrix(['Type','Channel'], rows)) +
       cfgCard([['SC slot unit (both channels)',UNIT.SC],['RPT slot unit (both channels)',UNIT.RPT],
                ['SC · Mental Health booking',PMIN['SC|mental_health']],['FU · Mental Health booking',PMIN['RPT|mental_health']]],
         'Slot configuration does not vary by channel. A booking’s channel is the appointment’s mode; slot capacity’s channel is the roster block’s location.');
     const so=offered('SC','Offline'), sn=offered('SC','Online');
     document.getElementById('exec').innerHTML =
       `<b>Channel mix:</b> SC capacity splits ${fmtN(isHour()?so.m:so.u)} offline vs ${fmtN(isHour()?sn.m:sn.u)} online. ` +
-      `Each channel card below reads independently — booked, outcomes and utilization for that channel only.`;
+      `Each row reads independently — booked, outcomes and utilization for that type × channel only.`;
   }
 
   function renderTab3(){
-    let html='';
-    ['SC','RPT'].forEach(t=>CHANNELS.forEach(ch=>PROGRAMS.forEach(([p,pn])=>{
-      html += secCard(`${t} · ${ch} · ${pn}`, offered(t,ch), outcomes(t,ch,p), pmin(t,p), true);
-    })));
-    document.getElementById('content').innerHTML = twoLevels(html) +
+    const rows = [];
+    ['SC','RPT'].forEach(t=>{
+      CHANNELS.forEach((ch,ci)=>{
+        PROGRAMS.forEach(([p,pn],pi)=>{
+          rows.push({
+            dims:[
+              (ci===0 && pi===0) ? {label:t, sub:TYPE_SUB[t], span:CHANNELS.length*(PROGRAMS.length+1)} : null,
+              pi===0 ? {label:ch, span:PROGRAMS.length+1} : null,
+              {label:pn}
+            ],
+            off:offered(t,ch), o:outcomes(t,ch,p), cfg:pmin(t,p), shared:true
+          });
+        });
+        rows.push({
+          dims:[null, null, {label:'All programs'}],
+          off:offered(t,ch), o:outcomes(t,ch), cfg:UNIT[t], cls:'subtotal'
+        });
+      });
+    });
+    document.getElementById('content').innerHTML =
+      twoLevels(matrix(['Type','Channel','Program'], rows)) +
       cfgCard([['SC · Sexual Health',PMIN['SC|sexual_health']],['SC · Mental Health',PMIN['SC|mental_health']],
                ['SC · Unattributed',PMIN['SC|unattributed']],
                ['RPT · Sexual Health',PMIN['RPT|sexual_health']],['RPT (FU) · Mental Health',PMIN['RPT|mental_health']],
                ['RPT · Unattributed',PMIN['RPT|unattributed']]],
-        'Unattributed = bookings with no program tag (they are counted, never dropped; their slot length matches the Sexual Health config). ' +
-        'Slot capacity carries no program tag, so <b>Offered is the channel’s shared pool</b>, repeated in each program card; each program’s utilization is its contribution to that pool — the three programs’ utilizations add up to the channel total in Tab 2.');
+        '* Unattributed = bookings with no program tag (counted, never dropped; their slot length matches the Sexual Health config). ' +
+        'Slot capacity carries no program tag, so <b>Offered is the type × channel shared pool</b> (marked *), repeated on each program row; ' +
+        'each program’s utilization is its contribution to that pool — the three programs add up to the “All programs” subtotal row.');
     const mh = outcomes('SC',null,'mental_health'), un = outcomes('SC',null,'unattributed');
     document.getElementById('exec').innerHTML =
       `<b>Program lens:</b> Mental Health took ${fmtN(isHour()?mh.bookedM:mh.booked)} of SC bookings and Unattributed ${fmtN(isHour()?un.bookedM:un.booked)} — ` +
