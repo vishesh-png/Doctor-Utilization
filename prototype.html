@@ -508,11 +508,14 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
         No-show = booking updated after slot start without completing (incl. late reschedules/cancellations); Rescheduled/Cancelled
         = released before start. Program: mental_health tag → MH, everything else (incl. untagged) → SH. Booking channel = the
         appointment's mode.</div></div>`;
-    const opts = ['<option value="">All doctors</option>']
-      .concat(U.doctors.map((n,i)=>[n,i]).sort((a,b)=>a[0].localeCompare(b[0]))
-        .map(([n,i])=>`<option value="${i}" ${String(i)===uDoc?'selected':''}>${n}</option>`)).join('');
+    const opts = ['<option value="All doctors"></option>']
+      .concat(U.doctors.map(n=>n).sort((a,b)=>a.localeCompare(b))
+        .map(n=>`<option value="${n}"></option>`)).join('');
     document.getElementById('exec').innerHTML =
-      `<b>Doctor:</b> <select id="uDoc" style="font:inherit;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--page);color:var(--ink-1);max-width:220px">${opts}</select>
+      `<b>Doctor:</b> <input id="uDoc" list="uDocList" placeholder="All doctors — type to search"
+         value="${uDoc===''?'':U.doctors[+uDoc]}"
+         style="font:inherit;padding:3px 8px;border:1px solid var(--border);border-radius:6px;background:var(--page);color:var(--ink-1);width:240px">
+       <datalist id="uDocList">${opts}</datalist>
        &nbsp; <b>Date:</b> <input type="date" id="uFrom" value="${uFrom}" style="font:inherit;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--page);color:var(--ink-1)">
        – <input type="date" id="uTo" value="${uTo}" style="font:inherit;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--page);color:var(--ink-1)">
        <button id="uCounts" style="float:right;font:inherit;font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:7px;background:var(--track);color:var(--ink-2);cursor:pointer">${uShowCounts?'Hide counts ▾':'Show counts ▸'}</button>`;
@@ -522,7 +525,13 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
       renderTabU();
     });
     bind('uFrom'); bind('uTo');
-    document.getElementById('uDoc').addEventListener('change', e=>{ uDoc = e.target.value; renderTabU(); });
+    document.getElementById('uDoc').addEventListener('change', e=>{
+      const v = e.target.value.trim();
+      if (!v || v.toLowerCase()==='all doctors'){ uDoc=''; renderTabU(); return; }
+      let i = U.doctors.findIndex(n=>n.toLowerCase()===v.toLowerCase());
+      if (i<0) i = U.doctors.findIndex(n=>n.toLowerCase().includes(v.toLowerCase()));
+      if (i>=0){ uDoc=String(i); renderTabU(); }
+    });
     document.getElementById('uCounts').addEventListener('click', ()=>{ uShowCounts=!uShowCounts; renderTabU(); });
   }
 
