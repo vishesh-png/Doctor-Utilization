@@ -400,62 +400,70 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
       `Switch to Hour Level to see the true time cost (an MH screening is ${PMIN['SC|mental_health']}m vs ${PMIN['SC|sexual_health']}m).`;
   }
 
-  // ---------- Utilization tab (hours only, date-filtered) ----------
-  let uFrom=null, uTo=null, uShowCounts=false;
-  function uClassify(a){
-    if (a.status==='COMPLETED') return 'comp';
-    if (a.status==='MISSED' || a.uas===1) return 'ns';
-    if (a.status==='RESCHEDULED') return 'resch';
-    if (a.status==='CANCELLED') return 'canc';
-    return null;
+  // ---------- Utilization tab (hours only, all doctors, date-filtered) ----------
+  let uFrom=null, uTo=null, uShowCounts=false, uDoc='';
+  const OUT_KEYS = {c:'comp', n:'ns', r:'resch', x:'canc'};
+  const cfgCache = {};
+  function cfgFor(U, d){
+    if (cfgCache[d]) return cfgCache[d];
+    const m = {};
+    U.configs.forEach(r=>{ if(r[0]===d) m[`${r[1]}|${r[2]}`]=r[3]; });
+    return cfgCache[d] = {
+      'SC|SH': m['SC|sexual_health'] ?? m['SC|any'] ?? 10,
+      'SC|MH': m['SC|mental_health'] ?? 30,
+      'RPT|SH': m['FU|any'] ?? m['FU|sexual_health'] ?? 5,
+      'RPT|MH': m['FU|mental_health'] ?? 10,
+    };
   }
   function renderTabU(){
     const U = window.UTILZ_DATA;
     if (!U){ document.getElementById('content').innerHTML =
       '<div class="cfgcard">No data — run fetch_utilization_tab.py</div>'; document.getElementById('exec').innerHTML=''; return; }
     if (!uFrom){
-      const last = U.blocks.length ? U.blocks[U.blocks.length-1].dt : U.updated.slice(0,10);
+      const last = U.blocks.length ? U.blocks.reduce((mx,b)=>b[1]>mx?b[1]:mx, '0') : U.updated.slice(0,10);
       uFrom = uTo = last;
     }
     const inR = dt => dt >= uFrom && dt <= uTo;
-    const blockMins = U.blocks.filter(b=>inR(b.dt)).reduce((s,b)=>s+b.mins,0);
+    const inDoc = d => uDoc==='' || d===+uDoc;
+    const blockMins = U.blocks.filter(b=>inDoc(b[0]) && inR(b[1])).reduce((s,b)=>s+b[2],0);
     const blockH = blockMins/60;
-    const CFGU = {'SC|SH':PMIN['SC|sexual_health'],'SC|MH':PMIN['SC|mental_health'],
-                  'RPT|SH':PMIN['RPT|sexual_health'],'RPT|MH':PMIN['RPT|mental_health']};
+    const activeDocs = [...new Set(U.blocks.filter(b=>inDoc(b[0]) && inR(b[1])).map(b=>b[0]))];
+    const capable = (t,ch) => U.caps.some(c=>inDoc(c[0]) && inR(c[1]) && c[2]===t && (ch==='Offline'?c[3]===1:c[4]===1));
     const ROWS = [];
     ['SC','RPT'].forEach(t=>['Offline','Online'].forEach(ch=>['SH','MH'].forEach(pr=>ROWS.push([t,ch,pr]))));
     const fh = v => (Math.round(v*100)/100).toFixed(2);
     const fpu = v => v==null?'–':(v*100).toFixed(1)+'%';
     let totC={comp:0,ns:0,resch:0,canc:0,booked:0}, totH={comp:0,ns:0,resch:0,canc:0,booked:0};
-    const capable = (t,ch) => (U.caps||[]).some(c=>inR(c.dt) && c.typ===t && (ch==='Offline'?c.off===1:c.on===1));
     const trs = ROWS.map(([t,ch,pr])=>{
-      const cfgm = CFGU[`${t}|${pr}`];
-      const o={comp:0,ns:0,resch:0,canc:0};
+      const cfgSet = new Set(activeDocs.map(d=>cfgFor(U,d)[`${t}|${pr}`]));
+      const cfgLabel = cfgSet.size===0 ? '–' : (cfgSet.size===1 ? [...cfgSet][0]+' min' : 'varies');
+      const o={comp:0,ns:0,resch:0,canc:0}, oh={comp:0,ns:0,resch:0,canc:0};
       U.appts.forEach(a=>{
-        if (!inR(a.dt) || a.typ!==t || a.channel!==ch || a.program!==pr) return;
-        const k=uClassify(a); if(k) o[k]+=a.n;
+        if (!inDoc(a[0]) || !inR(a[1]) || a[2]!==t || a[3]!==ch || a[4]!==pr) return;
+        const k = OUT_KEYS[a[5]]; if(!k) return;
+        o[k]+=a[6]; oh[k]+=a[6]*cfgFor(U,a[0])[`${t}|${pr}`]/60;
       });
       const booked = o.comp+o.ns+o.resch+o.canc;
-      const H = k => (k==='booked'?booked:o[k])*cfgm/60;
-      totC.booked+=booked; totH.booked+=H('booked');
-      ['comp','ns','resch','canc'].forEach(k=>{ totC[k]+=o[k]; totH[k]+=H(k); });
-      const net = blockH>0 ? H('comp')/blockH : null;
-      const gross = blockH>0 ? (H('comp')+H('ns'))/blockH : null;
+      const bookedH = oh.comp+oh.ns+oh.resch+oh.canc;
+      totC.booked+=booked; totH.booked+=bookedH;
+      ['comp','ns','resch','canc'].forEach(k=>{ totC[k]+=o[k]; totH[k]+=oh[k]; });
+      const net = blockH>0 ? oh.comp/blockH : null;
+      const gross = blockH>0 ? (oh.comp+oh.ns)/blockH : null;
       if (booked===0 && !capable(t,ch)){
         const span = uShowCounts ? 12 : 7;
         return `<tr><td class="dim">${t} ${ch} · ${pr}</td>
-          <td><span class="cfgpill">${cfgm} min</span></td>
-          <td colspan="${span}" style="text-align:left;color:var(--ink-3)">Not offered — no roster blocks map ${t} to ${ch.toLowerCase()} in this date range</td></tr>`;
+          <td><span class="cfgpill">${cfgLabel}</span></td>
+          <td colspan="${span}" style="text-align:left;color:var(--ink-3)">Not offered — no roster blocks map ${t} to ${ch.toLowerCase()} in this selection</td></tr>`;
       }
       const cnt = v => uShowCounts ? `<td>${v}</td>` : '';
       return `<tr>
         <td class="dim">${t} ${ch} · ${pr}</td>
-        <td><span class="cfgpill">${cfgm} min</span></td>
-        ${cnt(`<b>${booked}</b>`)}<td class="mut">${fh(H('booked'))}</td>
-        ${cnt(o.comp)}<td class="mut">${fh(H('comp'))}</td>
-        ${cnt(o.ns)}<td class="mut">${fh(H('ns'))}</td>
-        ${cnt(o.resch)}<td class="mut">${fh(H('resch'))}</td>
-        ${cnt(o.canc)}<td class="mut">${fh(H('canc'))}</td>
+        <td><span class="cfgpill">${cfgLabel}</span></td>
+        ${cnt(`<b>${booked}</b>`)}<td class="mut">${fh(bookedH)}</td>
+        ${cnt(o.comp)}<td class="mut">${fh(oh.comp)}</td>
+        ${cnt(o.ns)}<td class="mut">${fh(oh.ns)}</td>
+        ${cnt(o.resch)}<td class="mut">${fh(oh.resch)}</td>
+        ${cnt(o.canc)}<td class="mut">${fh(oh.canc)}</td>
         <td><b>${fpu(net)}</b></td><td><b>${fpu(gross)}</b></td>
       </tr>`;
     }).join('');
@@ -477,15 +485,22 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
         ${cT(totC.canc)}<td>${fh(totH.canc)}</td>
         <td><b>${fpu(totNet)}</b></td><td><b>${fpu(totGross)}</b></td></tr>
       </tbody></table></div>`;
+    const docName = uDoc==='' ? 'All doctors' : U.doctors[+uDoc];
     document.getElementById('content').innerHTML =
-      twoLevels(tableHtml) +
+      band(`${docName} — ${activeDocs.length} doctor${activeDocs.length===1?'':'s'} with roster in range`, '') + tableHtml +
       `<div class="cfgcard"><h3>How this tab computes</h3><div class="note">
-        Hours = count × that row's slot config ÷ 60. <b>Net utilization</b> = completed hours ÷ total block hours (${fh(blockH)}h in range).
-        <b>Gross utilization</b> = (completed + no-show hours) ÷ total block hours. No-show = booking updated after slot start without
-        completing (incl. late reschedules/cancellations); Rescheduled/Cancelled = released before start. Program: mental_health tag → MH,
-        everything else (incl. untagged) → SH. Booking channel = the appointment's mode.</div></div>`;
+        Hours = count × that DOCTOR's slot config for the row ÷ 60 (configs vary by doctor — "varies" means the selection mixes
+        different configs; hours are always computed per doctor before summing). <b>Net utilization</b> = completed hours ÷ total
+        block hours (${fh(blockH)}h in selection). <b>Gross utilization</b> = (completed + no-show hours) ÷ total block hours.
+        No-show = booking updated after slot start without completing (incl. late reschedules/cancellations); Rescheduled/Cancelled
+        = released before start. Program: mental_health tag → MH, everything else (incl. untagged) → SH. Booking channel = the
+        appointment's mode.</div></div>`;
+    const opts = ['<option value="">All doctors</option>']
+      .concat(U.doctors.map((n,i)=>[n,i]).sort((a,b)=>a[0].localeCompare(b[0]))
+        .map(([n,i])=>`<option value="${i}" ${String(i)===uDoc?'selected':''}>${n}</option>`)).join('');
     document.getElementById('exec').innerHTML =
-      `<b>Date:</b> <input type="date" id="uFrom" value="${uFrom}" style="font:inherit;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--page);color:var(--ink-1)">
+      `<b>Doctor:</b> <select id="uDoc" style="font:inherit;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--page);color:var(--ink-1);max-width:220px">${opts}</select>
+       &nbsp; <b>Date:</b> <input type="date" id="uFrom" value="${uFrom}" style="font:inherit;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--page);color:var(--ink-1)">
        – <input type="date" id="uTo" value="${uTo}" style="font:inherit;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--page);color:var(--ink-1)">
        &nbsp;·&nbsp; <b>Total block hours:</b> ${fh(blockH)}h
        &nbsp;·&nbsp; <b>Total net:</b> ${fpu(totNet)} &nbsp;·&nbsp; <b>Total gross:</b> ${fpu(totGross)}
@@ -496,6 +511,7 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
       renderTabU();
     });
     bind('uFrom'); bind('uTo');
+    document.getElementById('uDoc').addEventListener('change', e=>{ uDoc = e.target.value; renderTabU(); });
     document.getElementById('uCounts').addEventListener('click', ()=>{ uShowCounts=!uShowCounts; renderTabU(); });
   }
 

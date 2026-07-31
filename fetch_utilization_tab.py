@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """Data pull for the 'Utilization' tab of the prototype (hours-only view).
 
-Single doctor, last 60 days at day grain, so the tab's date filter works
-client-side without re-querying:
-- blocks: bookable block minutes per IST date (the "total hour" denominator)
-- appts: dt x type(SC/RPT) x channel(mode) x program x status x updated-after-start
-- configs: slot durations per type x program
+ALL physicians, last 60 days at day grain, so the tab's doctor + date filters
+work client-side without re-querying:
+- doctors: id -> name (indexed; rows below reference the index)
+- configs: provider-specific slot durations per type x program
+- blocks:  bookable block minutes per doctor x IST date (the denominator)
+- caps:    per doctor x date x type: offline/online capability from block maps
+- appts:   doctor x dt x type(SC/RPT) x channel(mode) x program(SH/MH) x outcome
+           outcome: c=completed, n=no-show (MISSED or updated after start),
+           r=rescheduled (before start), x=cancelled (before start)
 
-Usage: python3 fetch_utilization_tab.py [provider_id]
+Usage: python3 fetch_utilization_tab.py
 Auth: AWS profile `redshift-data` (SSO).
 """
 import json
@@ -21,8 +25,6 @@ PROFILE = "redshift-data"
 CLUSTER = "warehouse"
 DATABASE = "allo_prod"
 HERE = Path(__file__).resolve().parent
-
-PROVIDER = sys.argv[1] if len(sys.argv) > 1 else "34571382-e65f-429e-a6d8-20b4c1f22fa7"
 
 
 def aws(*args):
@@ -41,7 +43,7 @@ def run_query(sql, label):
     stmt = aws("redshift-data", "execute-statement",
                "--cluster-identifier", CLUSTER, "--database", DATABASE, "--sql", sql)
     sid = stmt["Id"]
-    for _ in range(300):
+    for _ in range(450):
         time.sleep(2)
         desc = aws("redshift-data", "describe-statement", "--id", sid)
         if desc["Status"] == "FINISHED":
@@ -66,69 +68,88 @@ def run_query(sql, label):
     return rows
 
 
-Q_DOCTOR = f"SELECT name FROM allo_persons.providers WHERE id='{PROVIDER}'"
+DOC_FILTER = """p.is_physician=1 AND p.deleted_at IS NULL"""
 
-Q_CONFIGS = f"""SELECT t.code, COALESCE(c.program,'any') AS program, c.duration_mins
-FROM allo_consultations.consultation_type_configs c
-JOIN allo_consultations.types t ON c.type_id=t.id
-WHERE c.deleted_at IS NULL AND t.code IN ('SC','FU','RR','PQ')
-  AND c.provider_id='{PROVIDER}'
-ORDER BY 1,2"""
-
-Q_BLOCKS = f"""SELECT CAST(DATEADD(minute,330,b.start_time) AS DATE) AS dt,
+Q_BLOCKS = f"""SELECT b.provider_id, p.name, CAST(DATEADD(minute,330,b.start_time) AS DATE) AS dt,
   SUM(DATEDIFF(minute, b.start_time, b.end_time)) AS mins
 FROM allo_consultations.appointment_blocks b
-WHERE b.provider_id='{PROVIDER}' AND b.deleted_at IS NULL AND b.is_bookable=1
+JOIN allo_persons.providers p ON b.provider_id=p.id AND {DOC_FILTER}
+WHERE b.deleted_at IS NULL AND b.is_bookable=1
   AND DATEADD(minute,330,b.start_time) >= DATEADD(day,-60,CURRENT_DATE)
-GROUP BY 1 ORDER BY 1"""
+GROUP BY 1,2,3 ORDER BY 2,3"""
 
-Q_CAP = f"""SELECT CAST(DATEADD(minute,330,b.start_time) AS DATE) AS dt,
+Q_CONFIGS = f"""SELECT c.provider_id, t.code, COALESCE(c.program,'any') AS program,
+  MAX(c.duration_mins) AS mins
+FROM allo_consultations.consultation_type_configs c
+JOIN allo_consultations.types t ON c.type_id=t.id
+JOIN allo_persons.providers p ON c.provider_id=p.id AND {DOC_FILTER}
+WHERE c.deleted_at IS NULL AND t.code IN ('SC','FU','RR','PQ')
+GROUP BY 1,2,3"""
+
+Q_CAP = f"""SELECT b.provider_id, CAST(DATEADD(minute,330,b.start_time) AS DATE) AS dt,
   CASE WHEN t.code='SC' THEN 'SC' ELSE 'RPT' END AS typ,
   MAX(CASE WHEN abtm.offline_location_id IS NOT NULL THEN 1 ELSE 0 END) AS has_off,
   MAX(CASE WHEN abtm.online_location_id IS NOT NULL THEN 1 ELSE 0 END) AS has_on
 FROM allo_consultations.appointment_blocks b
+JOIN allo_persons.providers p ON b.provider_id=p.id AND {DOC_FILTER}
 JOIN allo_consultations.appointment_block_type_maps abtm
   ON abtm.appointment_block_id=b.id AND abtm.deleted_at IS NULL
 JOIN allo_consultations.types t ON abtm.consultation_type_id=t.id AND t.code IN ('SC','FU','RR','PQ')
-WHERE b.provider_id='{PROVIDER}' AND b.deleted_at IS NULL AND b.is_bookable=1
+WHERE b.deleted_at IS NULL AND b.is_bookable=1
   AND DATEADD(minute,330,b.start_time) >= DATEADD(day,-60,CURRENT_DATE)
-GROUP BY 1,2 ORDER BY 1,2"""
+GROUP BY 1,2,3"""
 
-Q_APPTS = f"""SELECT CAST(DATEADD(minute,330,a.start_time) AS DATE) AS dt,
+Q_APPTS = f"""SELECT a.provider_id, CAST(DATEADD(minute,330,a.start_time) AS DATE) AS dt,
        CASE WHEN t.code='SC' THEN 'SC' ELSE 'RPT' END AS typ,
        CASE WHEN a.mode='offline' THEN 'Offline' ELSE 'Online' END AS channel,
        CASE WHEN a.program='mental_health' THEN 'MH' ELSE 'SH' END AS program,
-       a.status,
-       CASE WHEN a.updated_at > a.start_time THEN 1 ELSE 0 END AS uas,
+       CASE WHEN a.status='COMPLETED' THEN 'c'
+            WHEN a.status='MISSED' OR a.updated_at > a.start_time THEN 'n'
+            WHEN a.status='RESCHEDULED' THEN 'r'
+            WHEN a.status='CANCELLED' THEN 'x' END AS outcome,
        COUNT(*) AS n
 FROM allo_consultations.appointments a
+JOIN allo_persons.providers p ON a.provider_id=p.id AND {DOC_FILTER}
 JOIN allo_consultations.types t ON a.type_id=t.id
-WHERE a.provider_id='{PROVIDER}' AND a.deleted_at IS NULL
+WHERE a.deleted_at IS NULL
   AND t.code IN ('SC','FU','RR','PQ')
+  AND a.status IN ('COMPLETED','MISSED','RESCHEDULED','CANCELLED')
   AND DATEADD(minute,330,a.start_time) >= DATEADD(day,-60,CURRENT_DATE)
-GROUP BY 1,2,3,4,5,6 ORDER BY 1,2,3,4,5,6"""
+GROUP BY 1,2,3,4,5,6"""
 
 
 def main():
-    doctor = run_query(Q_DOCTOR, "doctor")[0][0]
-    configs = [{"type": r[0], "program": r[1], "mins": r[2]} for r in run_query(Q_CONFIGS, "configs")]
-    blocks = [{"dt": str(r[0])[:10], "mins": r[1]} for r in run_query(Q_BLOCKS, "blocks")]
-    appts = [{"dt": str(r[0])[:10], "typ": r[1], "channel": r[2], "program": r[3],
-              "status": r[4], "uas": r[5], "n": r[6]} for r in run_query(Q_APPTS, "appointments")]
-    caps = [{"dt": str(r[0])[:10], "typ": r[1], "off": r[2], "on": r[3]}
-            for r in run_query(Q_CAP, "capability")]
+    block_rows = run_query(Q_BLOCKS, "blocks")
+    cfg_rows = run_query(Q_CONFIGS, "configs")
+    cap_rows = run_query(Q_CAP, "capability")
+    appt_rows = run_query(Q_APPTS, "appointments")
+
+    docs, idx = [], {}
+    def di(pid, name=None):
+        if pid not in idx:
+            idx[pid] = len(docs)
+            docs.append(name or pid)
+        elif name and docs[idx[pid]] == pid:
+            docs[idx[pid]] = name
+        return idx[pid]
+
+    blocks = [[di(r[0], r[1]), str(r[2])[:10], r[3]] for r in block_rows]
+    configs = [[di(r[0]), r[1], r[2], r[3]] for r in cfg_rows if r[0] in idx]
+    caps = [[di(r[0]), str(r[1])[:10], r[2], r[3], r[4]] for r in cap_rows if r[0] in idx]
+    appts = [[di(r[0]), str(r[1])[:10], r[2], r[3], r[4], r[5], r[6]]
+             for r in appt_rows if r[0] in idx and r[5]]
+
     payload = {
         "updated": datetime.now().strftime("%Y-%m-%d %H:%M IST"),
-        "doctor": doctor,
-        "provider_id": PROVIDER,
-        "configs": configs,
-        "blocks": blocks,
-        "appts": appts,
-        "caps": caps,
+        "doctors": docs,
+        "blocks": blocks,   # [docIdx, dt, mins]
+        "configs": configs, # [docIdx, typeCode, program, mins]
+        "caps": caps,       # [docIdx, dt, typ, has_off, has_on]
+        "appts": appts,     # [docIdx, dt, typ, channel, program, outcome, n]
     }
     out = HERE / "data_utilz.js"
     out.write_text("window.UTILZ_DATA = " + json.dumps(payload, separators=(",", ":")) + ";\n")
-    sys.stderr.write(f"[done] {doctor}: {len(blocks)} block-days, {len(appts)} appt rows -> {out}\n")
+    sys.stderr.write(f"[done] {len(docs)} doctors, {len(blocks)} block-days, {len(appts)} appt rows -> {out}\n")
     print(str(out))
 
 
