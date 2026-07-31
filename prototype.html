@@ -64,6 +64,8 @@ table.matrix { width:100%; border-collapse:collapse; font-variant-numeric:tabula
 .matrix td.dim .sub { display:block; font-size:10.5px; font-weight:500; color:var(--ink-3); }
 .matrix td .big { font-weight:700; font-size:14px; }
 .matrix td.mut { color:var(--ink-2); }
+table.matrix.compact th, table.matrix.compact td { padding:5px 3px; font-size:11.5px; }
+table.matrix.compact .cfgpill { padding:1px 4px; font-size:9.5px; }
 .matrix tr.subtotal td { background:var(--page); font-weight:650; border-top:1px solid var(--axis); }
 .matrix tr.subtotal td.dim { color:var(--ink-2); font-size:12px; }
 .utilcell { display:inline-flex; align-items:center; gap:8px; justify-content:flex-end; min-width:110px; }
@@ -399,7 +401,7 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
   }
 
   // ---------- Utilization tab (hours only, date-filtered) ----------
-  let uFrom=null, uTo=null;
+  let uFrom=null, uTo=null, uShowCounts=false;
   function uClassify(a){
     if (a.status==='COMPLETED') return 'comp';
     if (a.status==='MISSED' || a.uas===1) return 'ns';
@@ -438,31 +440,34 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
       ['comp','ns','resch','canc'].forEach(k=>{ totC[k]+=o[k]; totH[k]+=H(k); });
       const net = blockH>0 ? H('comp')/blockH : null;
       const gross = blockH>0 ? (H('comp')+H('ns'))/blockH : null;
+      const cnt = v => uShowCounts ? `<td>${v}</td>` : '';
       return `<tr>
         <td class="dim">${t} ${ch} · ${pr}</td>
         <td><span class="cfgpill">${cfgm} min</span></td>
-        <td><b>${booked}</b></td><td class="mut">${fh(H('booked'))}</td>
-        <td>${o.comp}</td><td class="mut">${fh(H('comp'))}</td>
-        <td>${o.ns}</td><td class="mut">${fh(H('ns'))}</td>
-        <td>${o.resch}</td><td class="mut">${fh(H('resch'))}</td>
-        <td>${o.canc}</td><td class="mut">${fh(H('canc'))}</td>
+        ${cnt(`<b>${booked}</b>`)}<td class="mut">${fh(H('booked'))}</td>
+        ${cnt(o.comp)}<td class="mut">${fh(H('comp'))}</td>
+        ${cnt(o.ns)}<td class="mut">${fh(H('ns'))}</td>
+        ${cnt(o.resch)}<td class="mut">${fh(H('resch'))}</td>
+        ${cnt(o.canc)}<td class="mut">${fh(H('canc'))}</td>
         <td><b>${fpu(net)}</b></td><td><b>${fpu(gross)}</b></td>
       </tr>`;
     }).join('');
     const totNet = blockH>0 ? totH.comp/blockH : null;
     const totGross = blockH>0 ? (totH.comp+totH.ns)/blockH : null;
-    const tableHtml = `<div class="matrixcard"><table class="matrix">
+    const cH = t => uShowCounts ? `<th>${t}</th>` : '';
+    const cT = v => uShowCounts ? `<td>${v}</td>` : '';
+    const tableHtml = `<div class="matrixcard"><table class="matrix${uShowCounts?' compact':''}">
       <thead><tr><th class="dim">Metric</th><th>Config</th>
-      <th>Booked</th><th>Booked hrs</th><th>Completed</th><th>Completed hrs</th>
-      <th>No show</th><th>No show hrs</th><th>Resched</th><th>Resched hrs</th>
-      <th>Cancelled</th><th>Cancelled hrs</th><th>Net util</th><th>Gross util</th></tr></thead>
+      ${cH('Booked')}<th>Booked hrs</th>${cH('Completed')}<th>Completed hrs</th>
+      ${cH('No show')}<th>No show hrs</th>${cH('Resched')}<th>Resched hrs</th>
+      ${cH('Cancelled')}<th>Cancelled hrs</th><th>Net util</th><th>Gross util</th></tr></thead>
       <tbody>${trs}
       <tr class="subtotal"><td class="dim">Total</td><td></td>
-        <td><b>${totC.booked}</b></td><td>${fh(totH.booked)}</td>
-        <td>${totC.comp}</td><td>${fh(totH.comp)}</td>
-        <td>${totC.ns}</td><td>${fh(totH.ns)}</td>
-        <td>${totC.resch}</td><td>${fh(totH.resch)}</td>
-        <td>${totC.canc}</td><td>${fh(totH.canc)}</td>
+        ${cT(`<b>${totC.booked}</b>`)}<td>${fh(totH.booked)}</td>
+        ${cT(totC.comp)}<td>${fh(totH.comp)}</td>
+        ${cT(totC.ns)}<td>${fh(totH.ns)}</td>
+        ${cT(totC.resch)}<td>${fh(totH.resch)}</td>
+        ${cT(totC.canc)}<td>${fh(totH.canc)}</td>
         <td><b>${fpu(totNet)}</b></td><td><b>${fpu(totGross)}</b></td></tr>
       </tbody></table></div>`;
     document.getElementById('content').innerHTML =
@@ -476,13 +481,15 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
       `<b>Date:</b> <input type="date" id="uFrom" value="${uFrom}" style="font:inherit;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--page);color:var(--ink-1)">
        – <input type="date" id="uTo" value="${uTo}" style="font:inherit;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--page);color:var(--ink-1)">
        &nbsp;·&nbsp; <b>Total block hours:</b> ${fh(blockH)}h
-       &nbsp;·&nbsp; <b>Total net:</b> ${fpu(totNet)} &nbsp;·&nbsp; <b>Total gross:</b> ${fpu(totGross)}`;
+       &nbsp;·&nbsp; <b>Total net:</b> ${fpu(totNet)} &nbsp;·&nbsp; <b>Total gross:</b> ${fpu(totGross)}
+       <button id="uCounts" style="float:right;font:inherit;font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:7px;background:var(--track);color:var(--ink-2);cursor:pointer">${uShowCounts?'Hide counts ▾':'Show counts ▸'}</button>`;
     const bind = id => document.getElementById(id).addEventListener('change', e=>{
       if (id==='uFrom') uFrom = e.target.value; else uTo = e.target.value;
       if (uFrom > uTo) { if (id==='uFrom') uTo = uFrom; else uFrom = uTo; }
       renderTabU();
     });
     bind('uFrom'); bind('uTo');
+    document.getElementById('uCounts').addEventListener('click', ()=>{ uShowCounts=!uShowCounts; renderTabU(); });
   }
 
   function render(){
