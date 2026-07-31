@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Doctor Slot Utilization Tracker — Prototype</title>
+<style>
+:root {
+  --surface-1:#fcfcfb; --page:#f9f9f7;
+  --ink-1:#0b0b0b; --ink-2:#52514e; --ink-3:#898781;
+  --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,0.10);
+  --acc:#2a78d6; --acc-soft:#cde2fb;
+  --net:#1baf7a;
+  --track:#f0efec;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-1:#1a1a19; --page:#0d0d0d;
+    --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
+    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,0.10);
+    --acc:#3987e5; --acc-soft:#104281;
+    --net:#199e70;
+    --track:#2c2c2a;
+  }
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--page); color:var(--ink-1);
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif; font-size:14px; }
+.wrap { max-width:1220px; margin:0 auto; padding:20px 24px 60px; }
+header h1 { font-size:21px; margin:0 0 2px; }
+header .sub { color:var(--ink-3); font-size:12px; }
+header .sub a { color:var(--acc); text-decoration:none; }
+.badge { display:inline-block; font-size:10px; font-weight:700; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--acc); border:1px solid var(--acc);
+  border-radius:5px; padding:1px 7px; vertical-align:2px; margin-left:8px; }
+.controls { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin:18px 0 6px;
+  border-bottom:1px solid var(--axis); padding-bottom:0; }
+.tabs { display:flex; gap:2px; }
+.tabs button { font:inherit; font-size:13.5px; font-weight:600; border:0; background:transparent;
+  color:var(--ink-3); padding:9px 14px; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+.tabs button.on { color:var(--ink-1); border-bottom-color:var(--acc); }
+.toggle { margin-left:auto; display:flex; gap:4px; background:var(--track); padding:3px;
+  border-radius:8px; margin-bottom:6px; }
+.toggle button { font:inherit; font-size:12px; border:0; background:transparent; color:var(--ink-2);
+  padding:5px 12px; border-radius:6px; cursor:pointer; }
+.toggle button.on { background:var(--surface-1); color:var(--ink-1); font-weight:600;
+  box-shadow:0 1px 2px rgba(0,0,0,.12); }
+.exec { background:var(--surface-1); border:1px solid var(--border); border-left:3px solid var(--acc);
+  border-radius:10px; padding:12px 16px; margin:16px 0; font-size:13px; color:var(--ink-2); line-height:1.55; }
+.exec b { color:var(--ink-1); }
+.band { margin:22px 0 8px; display:flex; align-items:baseline; gap:10px; }
+.band h2 { font-size:12px; margin:0; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-3); }
+.band .line { flex:1; height:1px; background:var(--grid); }
+.band .tag { font-size:11px; color:var(--ink-3); }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(268px,1fr)); gap:12px; }
+.sec { background:var(--surface-1); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
+.sec h3 { font-size:13px; margin:0 0 10px; display:flex; align-items:center; gap:8px; }
+.sec h3 .cfg { margin-left:auto; font-size:10px; font-weight:600; color:var(--ink-3);
+  background:var(--track); border-radius:5px; padding:2px 6px; }
+.hero { display:flex; align-items:baseline; gap:8px; margin-bottom:10px; }
+.hero .v { font-size:26px; font-weight:700; }
+.hero .l { font-size:11px; color:var(--ink-3); }
+.utilrow { margin:7px 0; }
+.utilrow .lbl { display:flex; justify-content:space-between; font-size:11.5px; color:var(--ink-2); margin-bottom:3px; }
+.utilrow .lbl b { color:var(--ink-1); font-size:12.5px; }
+.ubar { height:6px; background:var(--track); border-radius:3px; overflow:hidden; }
+.ubar i { display:block; height:100%; border-radius:3px; }
+.mrows { margin-top:10px; border-top:1px solid var(--grid); }
+.mrow { display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid var(--grid);
+  font-size:12.5px; color:var(--ink-2); font-variant-numeric:tabular-nums; }
+.mrow b { color:var(--ink-1); font-weight:650; }
+.mrow.emph { font-size:13px; }
+.cfgcard { background:var(--surface-1); border:1px solid var(--border); border-radius:10px;
+  padding:14px 16px; margin-top:14px; }
+.cfgcard h3 { font-size:12px; margin:0 0 8px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-3); }
+.cfgrow { display:flex; flex-wrap:wrap; gap:8px; }
+.cfgchip { border:1px solid var(--border); background:var(--page); border-radius:7px;
+  padding:6px 11px; font-size:12px; color:var(--ink-2); }
+.cfgchip b { color:var(--ink-1); }
+.note { font-size:11.5px; color:var(--ink-3); margin-top:10px; line-height:1.5; }
+footer { color:var(--ink-3); font-size:11px; margin-top:22px; line-height:1.5; }
+.muted { color:var(--ink-3); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Doctor Slot Utilization Tracker <span class="badge">Prototype</span></h1>
+    <div class="sub" id="who"></div>
+    <div class="sub">Single-doctor prototype — <b>Company level ≡ Doctor level</b> by construction ·
+      <a href="index.html">main tracker</a> · <a href="weekly.html">weekly deep-dive</a></div>
+  </header>
+
+  <div class="controls">
+    <div class="tabs" id="tabs">
+      <button data-t="1" class="on">1 · Overall — SC vs RPT</button>
+      <button data-t="2">2 · Online / Offline Split</button>
+      <button data-t="3">3 · Program Split</button>
+    </div>
+    <div class="toggle" id="metricToggle">
+      <button data-m="slot" class="on">Slot Level</button>
+      <button data-m="hour">Hour Level</button>
+    </div>
+  </div>
+
+  <div class="exec" id="exec"></div>
+  <div id="content"></div>
+
+  <footer id="foot"></footer>
+</div>
+
+<script src="data_prototype.js"></script>
+<script>
+(function(){
+  const D = window.PROTO_DATA;
+  if (!D){ document.body.innerHTML = '<p style="padding:40px">No data — run fetch_prototype_data.py</p>'; return; }
+  const fmtDay = new Date(D.day+'T00:00:00').toLocaleDateString('en-IN',{weekday:'long', day:'numeric', month:'long', year:'numeric'});
+  document.getElementById('who').textContent = `${D.doctor} · ${fmtDay} · refreshed ${D.updated}`;
+
+  // ---------- configs ----------
+  const cfg = {};
+  D.configs.forEach(c=>{ cfg[`${c.type}|${c.program}`] = c.mins; });
+  const UNIT = { SC: cfg['SC|sexual_health'] ?? cfg['SC|any'] ?? 10,
+                 RPT: cfg['FU|any'] ?? 5 };
+  const PMIN = {
+    'SC|sexual_health': cfg['SC|sexual_health'] ?? UNIT.SC,
+    'SC|mental_health': cfg['SC|mental_health'] ?? UNIT.SC,
+    'SC|unattributed':  cfg['SC|sexual_health'] ?? UNIT.SC,
+    'RPT|sexual_health': cfg['FU|any'] ?? UNIT.RPT,
+    'RPT|mental_health': cfg['FU|mental_health'] ?? UNIT.RPT,
+    'RPT|unattributed':  cfg['FU|any'] ?? UNIT.RPT,
+  };
+  const pmin = (t,p) => PMIN[`${t}|${p}`] ?? UNIT[t];
+
+  // ---------- aggregation ----------
+  const STATUSES = { COMPLETED:'comp', MISSED:'ns', RESCHEDULED:'resch', CANCELLED:'canc' };
+  function offered(typ, channel){       // units + minutes
+    let u=0, m=0;
+    D.slots.forEach(s=>{ if (s.typ===typ && (!channel || s.channel===channel)){ u+=s.slots; m+=s.slots*s.dur; } });
+    return {u, m};
+  }
+  function outcomes(typ, channel, program){  // counts + minutes by his 4 statuses
+    const o = {comp:0,ns:0,resch:0,canc:0, compM:0,nsM:0,reschM:0,cancM:0};
+    D.appts.forEach(a=>{
+      if (a.typ!==typ) return;
+      if (channel && a.channel!==channel) return;
+      if (program && a.program!==program) return;
+      const k = STATUSES[a.status]; if (!k) return;
+      o[k]+=a.n; o[k+'M']+=a.n*pmin(a.typ, a.program);
+    });
+    o.booked = o.comp+o.ns+o.resch+o.canc;
+    o.bookedM = o.compM+o.nsM+o.reschM+o.cancM;
+    return o;
+  }
+
+  // ---------- rendering ----------
+  let tab='1', metric='slot';
+  const isHour = () => metric==='hour';
+  const fmtN = v => isHour() ? (v/60).toFixed(1)+'h' : String(v);
+  const fp = v => v==null?'–':(v*100).toFixed(1)+'%';
+  const pctv = (n,d) => d>0 ? n/d : null;
+
+  function secCard(title, off, o, cfgMins, shared){
+    // choose count- or hour-basis
+    const offV = isHour() ? off.m : off.u;
+    const val = k => isHour() ? o[k+'M'] : o[k];
+    const gross = pctv(val('booked'), offV);
+    const net = pctv(val('comp'), offV);
+    const bar = (v,color)=>`<div class="ubar"><i style="width:${Math.min(100,(v||0)*100)}%;background:${color}"></i></div>`;
+    return `<div class="sec">
+      <h3>${title}<span class="cfg">config ${cfgMins}</span></h3>
+      <div class="hero"><span class="v">${fmtN(offV)}</span>
+        <span class="l">${isHour()?'hours offered':'slots offered'}${shared?' · shared pool':''}</span></div>
+      <div class="utilrow"><div class="lbl"><span>Gross utilization <span class="muted">(booked ÷ offered)</span></span><b>${fp(gross)}</b></div>${bar(gross,'var(--acc)')}</div>
+      <div class="utilrow"><div class="lbl"><span>Net utilization <span class="muted">(completed ÷ offered)</span></span><b>${fp(net)}</b></div>${bar(net,'var(--net)')}</div>
+      <div class="mrows">
+        <div class="mrow emph"><span>Total booked</span><b>${fmtN(val('booked'))}</b></div>
+        <div class="mrow"><span>Completed</span><b>${fmtN(val('comp'))}</b></div>
+        <div class="mrow"><span>No show</span><b>${fmtN(val('ns'))}</b></div>
+        <div class="mrow"><span>Rescheduled</span><b>${fmtN(val('resch'))}</b></div>
+        <div class="mrow"><span>Cancelled</span><b>${fmtN(val('canc'))}</b></div>
+      </div>
+    </div>`;
+  }
+  const band = (label, tag) => `<div class="band"><h2>${label}</h2><div class="line"></div><span class="tag">${tag||''}</span></div>`;
+  function twoLevels(gridHtml){
+    return band('Company / Overall level', 'all doctors — 1 in this prototype') +
+      `<div class="grid">${gridHtml}</div>` +
+      band(`Doctor level — ${D.doctor}`, 'identical to company level by construction') +
+      `<div class="grid">${gridHtml}</div>`;
+  }
+  function cfgCard(chips, extra){
+    return `<div class="cfgcard"><h3>Slot configuration</h3>
+      <div class="cfgrow">${chips.map(([l,v])=>`<div class="cfgchip">${l} · <b>${v} min</b></div>`).join('')}</div>
+      ${extra?`<div class="note">${extra}</div>`:''}</div>`;
+  }
+
+  const PROGRAMS = [['sexual_health','Sexual Health'],['mental_health','Mental Health'],['unattributed','Unattributed']];
+  const CHANNELS = ['Offline','Online'];
+
+  function renderTab1(){
+    const html =
+      secCard('SC — Screening Calls', offered('SC'), outcomes('SC'), UNIT.SC) +
+      secCard('RPT — Repeats (FU · RR · PQ)', offered('RPT'), outcomes('RPT'), UNIT.RPT);
+    document.getElementById('content').innerHTML = twoLevels(html) +
+      cfgCard([['SC slot unit',UNIT.SC],['RPT slot unit',UNIT.RPT],
+               ['SC · Mental Health booking',PMIN['SC|mental_health']],['FU · Mental Health booking',PMIN['RPT|mental_health']]],
+        'The roster grid is cut in the base unit sizes; a Mental Health booking spans multiple consecutive units, which is why hour-level utilization can differ from slot-level.');
+    const sc = outcomes('SC'), so = offered('SC'), rp = outcomes('RPT'), ro = offered('RPT');
+    document.getElementById('exec').innerHTML =
+      `<b>${fmtDay.split(',')[0]}:</b> SC ran at <b>${fp(pctv(isHour()?sc.bookedM:sc.booked, isHour()?so.m:so.u))} gross</b> / ${fp(pctv(isHour()?sc.compM:sc.comp, isHour()?so.m:so.u))} net on ${fmtN(isHour()?so.m:so.u)} ${isHour()?'hours':'slots'}; ` +
+      `RPT at <b>${fp(pctv(isHour()?rp.bookedM:rp.booked, isHour()?ro.m:ro.u))} gross</b> / ${fp(pctv(isHour()?rp.compM:rp.comp, isHour()?ro.m:ro.u))} net on ${fmtN(isHour()?ro.m:ro.u)}. ` +
+      `Reschedules (${sc.resch+rp.resch}) are the largest leak between gross and net.`;
+  }
+
+  function renderTab2(){
+    let html='';
+    ['SC','RPT'].forEach(t=>CHANNELS.forEach(ch=>{
+      html += secCard(`${t} · ${ch}`, offered(t,ch), outcomes(t,ch), UNIT[t]);
+    }));
+    document.getElementById('content').innerHTML = twoLevels(html) +
+      cfgCard([['SC slot unit (both channels)',UNIT.SC],['RPT slot unit (both channels)',UNIT.RPT],
+               ['SC · Mental Health booking',PMIN['SC|mental_health']],['FU · Mental Health booking',PMIN['RPT|mental_health']]],
+        'Slot configuration does not vary by channel. A booking’s channel is the appointment’s mode; slot capacity’s channel is the roster block’s location.');
+    const so=offered('SC','Offline'), sn=offered('SC','Online');
+    document.getElementById('exec').innerHTML =
+      `<b>Channel mix:</b> SC capacity splits ${fmtN(isHour()?so.m:so.u)} offline vs ${fmtN(isHour()?sn.m:sn.u)} online. ` +
+      `Each channel card below reads independently — booked, outcomes and utilization for that channel only.`;
+  }
+
+  function renderTab3(){
+    let html='';
+    ['SC','RPT'].forEach(t=>CHANNELS.forEach(ch=>PROGRAMS.forEach(([p,pn])=>{
+      html += secCard(`${t} · ${ch} · ${pn}`, offered(t,ch), outcomes(t,ch,p), pmin(t,p), true);
+    })));
+    document.getElementById('content').innerHTML = twoLevels(html) +
+      cfgCard([['SC · Sexual Health',PMIN['SC|sexual_health']],['SC · Mental Health',PMIN['SC|mental_health']],
+               ['SC · Unattributed',PMIN['SC|unattributed']],
+               ['RPT · Sexual Health',PMIN['RPT|sexual_health']],['RPT (FU) · Mental Health',PMIN['RPT|mental_health']],
+               ['RPT · Unattributed',PMIN['RPT|unattributed']]],
+        'Unattributed = bookings with no program tag (they are counted, never dropped; their slot length matches the Sexual Health config). ' +
+        'Slot capacity carries no program tag, so <b>Offered is the channel’s shared pool</b>, repeated in each program card; each program’s utilization is its contribution to that pool — the three programs’ utilizations add up to the channel total in Tab 2.');
+    const mh = outcomes('SC',null,'mental_health'), un = outcomes('SC',null,'unattributed');
+    document.getElementById('exec').innerHTML =
+      `<b>Program lens:</b> Mental Health took ${fmtN(isHour()?mh.bookedM:mh.booked)} of SC bookings and Unattributed ${fmtN(isHour()?un.bookedM:un.booked)} — ` +
+      `unattributed bookings are surfaced as their own category, not ignored. Switch to Hour Level to see the true time cost (an MH screening is ${PMIN['SC|mental_health']}m vs ${PMIN['SC|sexual_health']}m).`;
+  }
+
+  function render(){
+    ({'1':renderTab1,'2':renderTab2,'3':renderTab3})[tab]();
+    document.getElementById('foot').innerHTML =
+      `Definitions — <b>Offered</b>: total configured slots on the roster (after shrinkage). <b>Total Booked</b> = Completed + No Show + Rescheduled + Cancelled. ` +
+      `<b>Gross Utilization</b> = Total Booked ÷ Offered. <b>Net Utilization</b> = Completed ÷ Offered. ` +
+      `Gross can exceed 100% when released slots (reschedules/cancellations) were re-booked. ` +
+      `Hour Level converts each metric via its program’s configured duration. ` +
+      `Data: allo_prod roster_slots (corrected dedup) + appointments + consultation_type_configs · ${D.doctor} · ${D.day}. ` +
+      `Refresh: <code>python3 fetch_prototype_data.py [provider_id] [day]</code>.`;
+  }
+
+  document.querySelectorAll('#tabs button').forEach(b=>b.addEventListener('click',()=>{
+    tab = b.dataset.t;
+    document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('on', x===b));
+    render();
+  }));
+  document.querySelectorAll('#metricToggle button').forEach(b=>b.addEventListener('click',()=>{
+    metric = b.dataset.m;
+    document.querySelectorAll('#metricToggle button').forEach(x=>x.classList.toggle('on', x===b));
+    render();
+  }));
+  render();
+})();
+</script>
+</body>
+</html>
