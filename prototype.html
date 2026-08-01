@@ -105,6 +105,34 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
 .tipbox th, .tipbox td { padding:3px 10px; border-bottom:1px solid var(--grid); white-space:nowrap; }
 .tipbox th { font-size:10px; color:var(--ink-3); text-transform:uppercase; }
 .tipbox td:first-child, .tipbox th:first-child { text-align:left; color:var(--ink-2); }
+/* --- utilization table: grouped headers + aligned numeric columns --- */
+table.util { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums lining-nums; font-size:13px; }
+table.util th, table.util td { white-space:nowrap; }
+table.util thead th { font-weight:600; color:var(--ink-3); text-transform:uppercase; letter-spacing:.03em; }
+table.util thead tr.grp th { font-size:10px; padding:9px 10px 5px; text-align:center; border-bottom:1px solid var(--grid); }
+table.util thead tr.grp th.dimh { text-align:left; vertical-align:bottom; border-bottom:1px solid var(--axis); }
+table.util thead tr.grp th .gsub { display:block; font-size:9px; font-weight:500; letter-spacing:0;
+  text-transform:none; color:var(--ink-3); opacity:.8; }
+table.util thead tr.sub th { font-size:9.5px; padding:4px 10px 7px; text-align:right;
+  border-bottom:1px solid var(--axis); color:var(--ink-3); }
+table.util tbody td { padding:7px 10px; text-align:right; border-bottom:1px solid var(--grid); }
+table.util tbody td.lbl { text-align:left; font-weight:650; color:var(--ink-1); }
+table.util tbody td.lbl .sub { display:block; font-size:10.5px; font-weight:500; color:var(--ink-3); margin-top:1px; }
+table.util td.cfg { text-align:center; }
+table.util .gs { border-left:1px solid var(--grid); }
+table.util tbody td.hrs { font-weight:650; color:var(--ink-1); }
+table.util tbody td.mins { color:var(--ink-2); }
+table.util tbody td.cnt { color:var(--ink-2); }
+table.util tbody td.z { color:var(--ink-3); opacity:.55; }
+table.util tbody tr.rptstart td { border-top:2px solid var(--axis); }
+table.util tbody tr:hover td { background:var(--track); }
+table.util tbody tr.tot td { background:var(--page); font-weight:700; color:var(--ink-1);
+  border-top:2px solid var(--axis); border-bottom:0; padding-top:9px; padding-bottom:9px; }
+table.util tbody tr.tot:hover td { background:var(--page); }
+table.util tbody tr.na td { color:var(--ink-3); }
+table.util.compact thead tr.grp th { padding:8px 6px 4px; }
+table.util.compact thead tr.sub th { padding:3px 6px 6px; }
+table.util.compact tbody td { padding:6px 6px; font-size:12px; }
 </style>
 </head>
 <body>
@@ -485,39 +513,58 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
       tot.grossC+=grossC; tot.grossM+=grossM;
       tot.netC+=o.comp; tot.netM+=om.comp;
       tot.nsC+=o.ns; tot.nsM+=om.ns;
+      const PG = uShowCounts ? 3 : 2;            // columns per metric group
+      const isRptStart = (t==='RPT' && ch==='Offline' && pr==='SH') ? ' rptstart' : '';
+      const nm = { SC:'SC', RPT:'Repeat' }[t];
+      const pn = { SH:'Sexual Health', MH:'Mental Health' }[pr];
       if (bookedC===0 && !capable(t,ch)){
-        const span = uShowCounts ? 9 : 5;
-        return `<tr><td class="dim">${t} ${ch} · ${pr}</td>
-          <td><span class="cfgpill">${cfgLabel}</span></td>
-          <td colspan="${span}" style="text-align:left;color:var(--ink-3)">Not offered — no roster blocks map ${t} to ${ch.toLowerCase()} in this selection</td></tr>`;
+        return `<tr class="na${isRptStart}">
+          <td class="lbl">${nm} · ${ch}<span class="sub">${pn}</span></td>
+          <td class="cfg"><span class="cfgpill">${cfgLabel}</span></td>
+          <td class="gs" colspan="${PG*4+1}" style="text-align:left">Not offered — no roster blocks map ${t} to ${ch.toLowerCase()} in this selection</td></tr>`;
       }
-      const cnt = v => uShowCounts ? `<td>${v}</td>` : '';
-      return `<tr>
-        <td class="dim">${t} ${ch} · ${pr}</td>
-        <td><span class="cfgpill">${cfgLabel}</span></td>
-        ${cnt(`<b>${bookedC}</b>`)}<td class="mut">${mh(bookedM)}</td>
-        <td>${rcC}</td>
-        ${cnt(grossC)}<td class="mut">${mh(grossM)}</td>
-        ${cnt(o.comp)}<td class="mut">${mh(om.comp)}</td>
-        ${cnt(o.ns)}<td class="mut">${mh(om.ns)}</td>
+      const num = (v,cls) => `<td class="${cls}${v===0?' z':''}">${v===0?'0':v.toLocaleString('en-IN')}</td>`;
+      const grp = (c,m,first) => (uShowCounts ? `<td class="cnt${first?' gs':''}${c===0?' z':''}">${c}</td>` : '')
+        + `<td class="mins${(!uShowCounts&&first)?' gs':''}${m===0?' z':''}">${Math.round(m).toLocaleString('en-IN')}</td>`
+        + `<td class="hrs${m===0?' z':''}">${fh(m/60)}</td>`;
+      return `<tr class="${isRptStart}">
+        <td class="lbl">${nm} · ${ch}<span class="sub">${pn}</span></td>
+        <td class="cfg"><span class="cfgpill">${cfgLabel}</span></td>
+        ${grp(bookedC, bookedM, true)}
+        <td class="cnt gs${rcC===0?' z':''}">${rcC}</td>
+        ${grp(grossC, grossM, true)}
+        ${grp(o.comp, om.comp, true)}
+        ${grp(o.ns, om.ns, true)}
       </tr>`;
     }).join('');
-    const cH = t => uShowCounts ? `<th>${t}</th>` : '';
-    const cT = v => uShowCounts ? `<td>${v}</td>` : '';
-    const tableHtml = `<div class="matrixcard"><table class="matrix${uShowCounts?' compact':''}">
-      <thead><tr><th class="dim">Metric</th><th>Config</th>
-      ${cH('Booked #')}<th>Booked (Mins | Hrs)</th>
-      <th>Resch + Canc #</th>
-      ${cH('Gross #')}<th>Gross (Mins | Hrs)</th>
-      ${cH('Net #')}<th>Net (Mins | Hrs)</th>
-      ${cH('No-show #')}<th>No-show (Mins | Hrs)</th></tr></thead>
+    const PG = uShowCounts ? 3 : 2;
+    const gHead = (title, sub) => `<th class="gs" colspan="${PG}">${title}${sub?`<span class="gsub">${sub}</span>`:''}</th>`;
+    const sHead = () => (uShowCounts ? '<th class="gs">#</th><th>Mins</th>' : '<th class="gs">Mins</th>') + '<th>Hrs</th>';
+    const tHead = `<thead>
+      <tr class="grp">
+        <th class="dimh" rowspan="2">Metric</th>
+        <th class="dimh" rowspan="2" style="text-align:center">Slot<span class="gsub">config</span></th>
+        ${gHead('Booked','all bookings')}
+        <th class="gs" rowspan="2" style="vertical-align:bottom;text-align:right">Resch +<br>Canc</th>
+        ${gHead('Gross','completed + no-show')}
+        ${gHead('Net','completed')}
+        ${gHead('No-show','burned time')}
+      </tr>
+      <tr class="sub">${sHead()}${sHead()}${sHead()}${sHead()}</tr>
+    </thead>`;
+    const tG = (c,m,first) => (uShowCounts ? `<td class="${first?'gs':''}">${c.toLocaleString('en-IN')}</td>` : '')
+      + `<td class="${(!uShowCounts&&first)?'gs':''}">${Math.round(m).toLocaleString('en-IN')}</td>`
+      + `<td>${fh(m/60)}</td>`;
+    const tableHtml = `<div class="matrixcard"><table class="util${uShowCounts?' compact':''}">
+      ${tHead}
       <tbody>${trs}
-      <tr class="subtotal"><td class="dim">Total</td><td></td>
-        ${cT(`<b>${tot.bookedC}</b>`)}<td>${mh(tot.bookedM)}</td>
-        <td>${tot.rcC}</td>
-        ${cT(tot.grossC)}<td>${mh(tot.grossM)}</td>
-        ${cT(tot.netC)}<td>${mh(tot.netM)}</td>
-        ${cT(tot.nsC)}<td>${mh(tot.nsM)}</td></tr>
+      <tr class="tot"><td class="lbl">Total</td><td></td>
+        ${tG(tot.bookedC, tot.bookedM, true)}
+        <td class="gs">${tot.rcC}</td>
+        ${tG(tot.grossC, tot.grossM, true)}
+        ${tG(tot.netC, tot.netM, true)}
+        ${tG(tot.nsC, tot.nsM, true)}
+      </tr>
       </tbody></table></div>`;
     const bookedU = blockH>0 ? (tot.bookedM/60)/blockH : null;
     const grossU  = blockH>0 ? (tot.grossM/60)/blockH : null;
