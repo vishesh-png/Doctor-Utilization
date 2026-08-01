@@ -460,7 +460,7 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
       tot.netC+=o.comp; tot.netM+=om.comp;
       tot.nsC+=o.ns; tot.nsM+=om.ns;
       if (bookedC===0 && !capable(t,ch)){
-        const span = uShowCounts ? 9 : 4;
+        const span = uShowCounts ? 9 : 5;
         return `<tr><td class="dim">${t} ${ch} · ${pr}</td>
           <td><span class="cfgpill">${cfgLabel}</span></td>
           <td colspan="${span}" style="text-align:left;color:var(--ink-3)">Not offered — no roster blocks map ${t} to ${ch.toLowerCase()} in this selection</td></tr>`;
@@ -470,7 +470,7 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
         <td class="dim">${t} ${ch} · ${pr}</td>
         <td><span class="cfgpill">${cfgLabel}</span></td>
         ${cnt(`<b>${bookedC}</b>`)}<td class="mut">${mh(bookedM)}</td>
-        ${cnt(rcC)}
+        <td>${rcC}</td>
         ${cnt(grossC)}<td class="mut">${mh(grossM)}</td>
         ${cnt(o.comp)}<td class="mut">${mh(om.comp)}</td>
         ${cnt(o.ns)}<td class="mut">${mh(om.ns)}</td>
@@ -480,15 +480,15 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
     const cT = v => uShowCounts ? `<td>${v}</td>` : '';
     const tableHtml = `<div class="matrixcard"><table class="matrix${uShowCounts?' compact':''}">
       <thead><tr><th class="dim">Metric</th><th>Config</th>
-      ${cH('Booked #')}<th>Booked (m | h)</th>
-      ${cH('R+C #')}
-      ${cH('Gross #')}<th>Gross (m | h)</th>
-      ${cH('Net #')}<th>Net (m | h)</th>
-      ${cH('No-show #')}<th>No-show (m | h)</th></tr></thead>
+      ${cH('Booked #')}<th>Booked (Mins | Hrs)</th>
+      <th>Resch + Canc #</th>
+      ${cH('Gross #')}<th>Gross (Mins | Hrs)</th>
+      ${cH('Net #')}<th>Net (Mins | Hrs)</th>
+      ${cH('No-show #')}<th>No-show (Mins | Hrs)</th></tr></thead>
       <tbody>${trs}
       <tr class="subtotal"><td class="dim">Total</td><td></td>
         ${cT(`<b>${tot.bookedC}</b>`)}<td>${mh(tot.bookedM)}</td>
-        ${cT(tot.rcC)}
+        <td>${tot.rcC}</td>
         ${cT(tot.grossC)}<td>${mh(tot.grossM)}</td>
         ${cT(tot.netC)}<td>${mh(tot.netM)}</td>
         ${cT(tot.nsC)}<td>${mh(tot.nsM)}</td></tr>
