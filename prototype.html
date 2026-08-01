@@ -68,7 +68,7 @@ table.matrix { width:100%; border-collapse:collapse; font-variant-numeric:tabula
 .matrix td.dim .sub { display:block; font-size:10.5px; font-weight:500; color:var(--ink-3); }
 .matrix td .big { font-weight:700; font-size:14px; }
 .matrix td.mut { color:var(--ink-2); }
-table.matrix.compact th, table.matrix.compact td { padding:5px 3px; font-size:11.5px; }
+table.matrix.compact th, table.matrix.compact td { padding:5px 3px; font-size:11px; }
 table.matrix.compact .cfgpill { padding:1px 4px; font-size:9.5px; }
 .matrix tr.subtotal td { background:var(--page); font-weight:650; border-top:1px solid var(--axis); }
 .matrix tr.subtotal td.dim { color:var(--ink-2); font-size:12px; }
@@ -425,7 +425,7 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
       '<div class="cfgcard">No data — run fetch_utilization_tab.py</div>'; document.getElementById('exec').innerHTML=''; return; }
     if (!uFrom){
       const today = new Date().toISOString().slice(0,10);
-      const past = U.blocks.filter(b=>b[1]<=today).map(b=>b[1]);
+      const past = U.blocks.filter(b=>b[1]<today).map(b=>b[1]);  // latest COMPLETED day
       const last = past.length ? past.reduce((mx,d)=>d>mx?d:mx,'0')
                  : (U.blocks.length ? U.blocks[0][1] : U.updated.slice(0,10));
       uFrom = uTo = last;
@@ -440,24 +440,27 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
     ['SC','RPT'].forEach(t=>['Offline','Online'].forEach(ch=>['SH','MH'].forEach(pr=>ROWS.push([t,ch,pr]))));
     const fh = v => (Math.round(v*100)/100).toFixed(2);
     const fpu = v => v==null?'–':(v*100).toFixed(1)+'%';
-    let totC={comp:0,ns:0,resch:0,canc:0,booked:0}, totH={comp:0,ns:0,resch:0,canc:0,booked:0};
+    const mh = m => `${Math.round(m)}m&nbsp;|&nbsp;${fh(m/60)}h`;  // "(mins | hours)" cell
+    // totals: counts + minutes for booked / gross(comp+ns) / net(comp) / noshow(ns) / resch+canc
+    const tot = {bookedC:0,bookedM:0, rcC:0, grossC:0,grossM:0, netC:0,netM:0, nsC:0,nsM:0};
     const trs = ROWS.map(([t,ch,pr])=>{
       const cfgSet = new Set(activeDocs.map(d=>cfgFor(U,d)[`${t}|${pr}`]));
       const cfgLabel = cfgSet.size===0 ? '–' : (cfgSet.size===1 ? [...cfgSet][0]+' min' : 'varies');
-      const o={comp:0,ns:0,resch:0,canc:0}, oh={comp:0,ns:0,resch:0,canc:0};
+      const o={comp:0,ns:0,resch:0,canc:0}, om={comp:0,ns:0,resch:0,canc:0};
       U.appts.forEach(a=>{
         if (!inDoc(a[0]) || !inR(a[1]) || a[2]!==t || a[3]!==ch || a[4]!==pr) return;
         const k = OUT_KEYS[a[5]]; if(!k) return;
-        o[k]+=a[6]; oh[k]+=a[6]*cfgFor(U,a[0])[`${t}|${pr}`]/60;
+        o[k]+=a[6]; om[k]+=a[6]*cfgFor(U,a[0])[`${t}|${pr}`];
       });
-      const booked = o.comp+o.ns+o.resch+o.canc;
-      const bookedH = oh.comp+oh.ns+oh.resch+oh.canc;
-      totC.booked+=booked; totH.booked+=bookedH;
-      ['comp','ns','resch','canc'].forEach(k=>{ totC[k]+=o[k]; totH[k]+=oh[k]; });
-      const net = blockH>0 ? oh.comp/blockH : null;
-      const gross = blockH>0 ? (oh.comp+oh.ns)/blockH : null;
-      if (booked===0 && !capable(t,ch)){
-        const span = uShowCounts ? 12 : 7;
+      const bookedC = o.comp+o.ns+o.resch+o.canc, bookedM = om.comp+om.ns+om.resch+om.canc;
+      const grossC = o.comp+o.ns, grossM = om.comp+om.ns;
+      const rcC = o.resch+o.canc;
+      tot.bookedC+=bookedC; tot.bookedM+=bookedM; tot.rcC+=rcC;
+      tot.grossC+=grossC; tot.grossM+=grossM;
+      tot.netC+=o.comp; tot.netM+=om.comp;
+      tot.nsC+=o.ns; tot.nsM+=om.ns;
+      if (bookedC===0 && !capable(t,ch)){
+        const span = uShowCounts ? 9 : 4;
         return `<tr><td class="dim">${t} ${ch} · ${pr}</td>
           <td><span class="cfgpill">${cfgLabel}</span></td>
           <td colspan="${span}" style="text-align:left;color:var(--ink-3)">Not offered — no roster blocks map ${t} to ${ch.toLowerCase()} in this selection</td></tr>`;
@@ -466,48 +469,53 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
       return `<tr>
         <td class="dim">${t} ${ch} · ${pr}</td>
         <td><span class="cfgpill">${cfgLabel}</span></td>
-        ${cnt(`<b>${booked}</b>`)}<td class="mut">${fh(bookedH)}</td>
-        ${cnt(o.comp)}<td class="mut">${fh(oh.comp)}</td>
-        ${cnt(o.ns)}<td class="mut">${fh(oh.ns)}</td>
-        ${cnt(o.resch)}<td class="mut">${fh(oh.resch)}</td>
-        ${cnt(o.canc)}<td class="mut">${fh(oh.canc)}</td>
-        <td><b>${fpu(net)}</b></td><td><b>${fpu(gross)}</b></td>
+        ${cnt(`<b>${bookedC}</b>`)}<td class="mut">${mh(bookedM)}</td>
+        ${cnt(rcC)}
+        ${cnt(grossC)}<td class="mut">${mh(grossM)}</td>
+        ${cnt(o.comp)}<td class="mut">${mh(om.comp)}</td>
+        ${cnt(o.ns)}<td class="mut">${mh(om.ns)}</td>
       </tr>`;
     }).join('');
-    const totNet = blockH>0 ? totH.comp/blockH : null;
-    const totGross = blockH>0 ? (totH.comp+totH.ns)/blockH : null;
     const cH = t => uShowCounts ? `<th>${t}</th>` : '';
     const cT = v => uShowCounts ? `<td>${v}</td>` : '';
     const tableHtml = `<div class="matrixcard"><table class="matrix${uShowCounts?' compact':''}">
       <thead><tr><th class="dim">Metric</th><th>Config</th>
-      ${cH('Booked')}<th>Booked hrs</th>${cH('Completed')}<th>Completed hrs</th>
-      ${cH('No show')}<th>No show hrs</th>${cH('Resched')}<th>Resched hrs</th>
-      ${cH('Cancelled')}<th>Cancelled hrs</th><th>Net util</th><th>Gross util</th></tr></thead>
+      ${cH('Booked #')}<th>Booked (m | h)</th>
+      ${cH('R+C #')}
+      ${cH('Gross #')}<th>Gross (m | h)</th>
+      ${cH('Net #')}<th>Net (m | h)</th>
+      ${cH('No-show #')}<th>No-show (m | h)</th></tr></thead>
       <tbody>${trs}
       <tr class="subtotal"><td class="dim">Total</td><td></td>
-        ${cT(`<b>${totC.booked}</b>`)}<td>${fh(totH.booked)}</td>
-        ${cT(totC.comp)}<td>${fh(totH.comp)}</td>
-        ${cT(totC.ns)}<td>${fh(totH.ns)}</td>
-        ${cT(totC.resch)}<td>${fh(totH.resch)}</td>
-        ${cT(totC.canc)}<td>${fh(totH.canc)}</td>
-        <td><b>${fpu(totNet)}</b></td><td><b>${fpu(totGross)}</b></td></tr>
+        ${cT(`<b>${tot.bookedC}</b>`)}<td>${mh(tot.bookedM)}</td>
+        ${cT(tot.rcC)}
+        ${cT(tot.grossC)}<td>${mh(tot.grossM)}</td>
+        ${cT(tot.netC)}<td>${mh(tot.netM)}</td>
+        ${cT(tot.nsC)}<td>${mh(tot.nsM)}</td></tr>
       </tbody></table></div>`;
+    const bookedU = blockH>0 ? (tot.bookedM/60)/blockH : null;
+    const grossU  = blockH>0 ? (tot.grossM/60)/blockH : null;
+    const netU    = blockH>0 ? (tot.netM/60)/blockH : null;
+    const nsByGross = tot.grossM>0 ? tot.nsM/tot.grossM : null;
     const docName = uDoc==='' ? 'All doctors' : U.doctors[+uDoc];
-    const statCards = `<div class="statcards">
+    const statCards = `<div class="statcards" style="grid-template-columns:repeat(5,minmax(0,1fr))">
       <div class="statcard"><div class="l">Total block hours</div><div class="v">${fh(blockH)}h</div></div>
-      <div class="statcard"><div class="l">Total net utilization</div><div class="v">${fpu(totNet)}</div></div>
-      <div class="statcard"><div class="l">Total gross utilization</div><div class="v">${fpu(totGross)}</div></div>
+      <div class="statcard"><div class="l">Booked utilization</div><div class="v">${fpu(bookedU)}</div></div>
+      <div class="statcard"><div class="l">Gross utilization</div><div class="v">${fpu(grossU)}</div></div>
+      <div class="statcard"><div class="l">Net utilization</div><div class="v">${fpu(netU)}</div></div>
+      <div class="statcard"><div class="l">No-show % of gross</div><div class="v">${fpu(nsByGross)}</div></div>
     </div>`;
     document.getElementById('content').innerHTML =
       statCards +
       band(`${docName} — ${activeDocs.length} doctor${activeDocs.length===1?'':'s'} with roster in range`, '') + tableHtml +
       `<div class="cfgcard"><h3>How this tab computes</h3><div class="note">
-        Hours = count × that DOCTOR's slot config for the row ÷ 60 (configs vary by doctor — "varies" means the selection mixes
-        different configs; hours are always computed per doctor before summing). <b>Net utilization</b> = completed hours ÷ total
-        block hours (${fh(blockH)}h in selection). <b>Gross utilization</b> = (completed + no-show hours) ÷ total block hours.
-        No-show = booking updated after slot start without completing (incl. late reschedules/cancellations); Rescheduled/Cancelled
-        = released before start. Program: mental_health tag → MH, everything else (incl. untagged) → SH. Booking channel = the
-        appointment's mode.</div></div>`;
+        Every value = count × that DOCTOR's slot config for the row, shown as minutes | hours (configs vary by doctor —
+        "varies" means the selection mixes configs; conversion always happens per doctor before summing).
+        <b>Gross</b> = completed + no-show. <b>Net</b> = completed. <b>Booked utilization</b> = booked hours ÷ total block hours
+        (${fh(blockH)}h in selection); <b>Gross/Net utilization</b> likewise vs block hours; <b>No-show % of gross</b> = no-show
+        time ÷ gross time. No-show = booking updated after slot start without completing (incl. late reschedules/cancellations);
+        Resch + Canc = released before start (count only — released time returns to the pool). Program: mental_health tag → MH,
+        everything else (incl. untagged) → SH. Booking channel = the appointment's mode.</div></div>`;
     const opts = ['<option value="All doctors"></option>']
       .concat(U.doctors.map(n=>n).sort((a,b)=>a.localeCompare(b))
         .map(n=>`<option value="${n}"></option>`)).join('');
