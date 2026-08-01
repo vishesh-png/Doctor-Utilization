@@ -209,6 +209,74 @@ LEFT JOIN nxt n ON n.id=r.id AND n.rn=1
 LEFT JOIN refill f ON f.id=r.id
 GROUP BY 1,2,3,4,5,6,7,8"""
 
+# ---- cut 1: exact fill curve (day-level lead, not buckets) ----
+Q_LEADDAYS = f"""SELECT ap.provider_id,
+  LEAST(GREATEST(DATEDIFF(day, CAST(DATEADD(minute,330,ap.created_at) AS DATE),
+                               CAST(DATEADD(minute,330,ap.start_time) AS DATE)), 0), 15) AS lead_d,
+  {OUTCOME} AS outcome, COUNT(*) AS n
+{BASE}
+GROUP BY 1,2,3"""
+
+# ---- cut 2: lead time x hour of day (do evening slots sell later?) ----
+Q_LEADHOUR = f"""SELECT ap.provider_id, EXTRACT(HOUR FROM DATEADD(minute,330,ap.start_time)) AS hr,
+  CASE WHEN DATEDIFF(day, CAST(DATEADD(minute,330,ap.created_at) AS DATE),
+                          CAST(DATEADD(minute,330,ap.start_time) AS DATE)) = 0 THEN 'same'
+       WHEN DATEDIFF(day, CAST(DATEADD(minute,330,ap.created_at) AS DATE),
+                          CAST(DATEADD(minute,330,ap.start_time) AS DATE)) <= 3 THEN 'near'
+       ELSE 'far' END AS lead_grp,
+  {OUTCOME} AS outcome, COUNT(*) AS n
+{BASE}
+GROUP BY 1,2,3,4"""
+
+# ---- cut 3: lead mix by channel over weeks (is the cutoff experiment moving it?) ----
+Q_CHANWEEK = f"""SELECT ap.provider_id, {CHAN} AS channel,
+  CAST(DATE_TRUNC('week', DATEADD(minute,330,ap.start_time)) AS DATE) AS wk,
+  CASE WHEN DATEDIFF(day, CAST(DATEADD(minute,330,ap.created_at) AS DATE),
+                          CAST(DATEADD(minute,330,ap.start_time) AS DATE)) = 0 THEN 'same'
+       WHEN DATEDIFF(day, CAST(DATEADD(minute,330,ap.created_at) AS DATE),
+                          CAST(DATEADD(minute,330,ap.start_time) AS DATE)) <= 3 THEN 'near'
+       ELSE 'far' END AS lead_grp,
+  {OUTCOME} AS outcome, COUNT(*) AS n
+{BASE}
+GROUP BY 1,2,3,4,5"""
+
+# ---- cut 4: first-ever patient vs returning ----
+Q_FIRST = f"""WITH firsts AS (
+  SELECT patient_id, MIN(created_at) AS first_created
+  FROM allo_consultations.appointments WHERE deleted_at IS NULL GROUP BY 1
+)
+SELECT ap.provider_id,
+  CASE WHEN ap.created_at <= DATEADD(minute,1,f.first_created) THEN 1 ELSE 0 END AS is_first,
+  CASE WHEN DATEDIFF(day, CAST(DATEADD(minute,330,ap.created_at) AS DATE),
+                          CAST(DATEADD(minute,330,ap.start_time) AS DATE)) = 0 THEN 'same'
+       WHEN DATEDIFF(day, CAST(DATEADD(minute,330,ap.created_at) AS DATE),
+                          CAST(DATEADD(minute,330,ap.start_time) AS DATE)) <= 3 THEN 'near'
+       ELSE 'far' END AS lead_grp,
+  {TYP} AS typ, {OUTCOME} AS outcome, COUNT(*) AS n
+FROM allo_consultations.appointments ap
+JOIN allo_persons.providers p ON ap.provider_id=p.id AND {DOC}
+JOIN allo_consultations.types t ON ap.type_id=t.id AND t.code IN ('SC','FU','RR','PQ')
+JOIN firsts f ON f.patient_id = ap.patient_id
+WHERE ap.deleted_at IS NULL AND {WIN}
+  AND ap.status IN ('COMPLETED','MISSED','RESCHEDULED','CANCELLED')
+GROUP BY 1,2,3,4,5"""
+
+# ---- cut 5: same-slot competition (how many bookings landed on one slot) ----
+Q_COMPETE = f"""SELECT provider_id, LEAST(cnt,4) AS cnt_b, COUNT(*) AS n_slots
+FROM (
+  SELECT ap.provider_id, ap.start_time, COUNT(*) AS cnt
+  {BASE}
+  GROUP BY 1,2
+) x GROUP BY 1,2"""
+
+# ---- cut 6: serial reschedulers ----
+Q_SERIAL = f"""SELECT provider_id, LEAST(rc,4) AS rc_b, COUNT(*) AS patients, SUM(rc) AS reschedules
+FROM (
+  SELECT ap.provider_id, ap.patient_id, COUNT(*) AS rc
+  {BASE} AND ap.status='RESCHEDULED'
+  GROUP BY 1,2
+) x GROUP BY 1,2"""
+
 
 def main():
     lead = run_query(Q_LEAD, "lead-time cohorts")
@@ -228,6 +296,12 @@ def main():
     supply_dow = [[di(r[0]), int(r[1]), r[2]] for r in run_query(Q_SUPPLY_DOW, "capacity by weekday") if r[0] in idx]
     resched = [[di(r[0]), r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8]]
                for r in run_query(Q_RESCHED, "reschedule quality + recovery") if r[0] in idx]
+    leaddays = [[di(r[0]), int(r[1]), r[2], r[3]] for r in run_query(Q_LEADDAYS, "fill curve") if r[0] in idx]
+    leadhour = [[di(r[0]), int(r[1]), r[2], r[3], r[4]] for r in run_query(Q_LEADHOUR, "lead x hour") if r[0] in idx]
+    chanweek = [[di(r[0]), r[1], str(r[2])[:10], r[3], r[4], r[5]] for r in run_query(Q_CHANWEEK, "lead by channel x week") if r[0] in idx]
+    firstpat = [[di(r[0]), r[1], r[2], r[3], r[4], r[5]] for r in run_query(Q_FIRST, "new vs returning") if r[0] in idx]
+    compete = [[di(r[0]), int(r[1]), r[2]] for r in run_query(Q_COMPETE, "same-slot competition") if r[0] in idx]
+    serial = [[di(r[0]), int(r[1]), r[2], r[3]] for r in run_query(Q_SERIAL, "serial reschedulers") if r[0] in idx]
 
     payload = {
         "updated": datetime.now().strftime("%Y-%m-%d %H:%M IST"),
@@ -240,6 +314,12 @@ def main():
         "supply": supply,
         "supplyDow": supply_dow,
         "resched": resched,
+        "leaddays": leaddays,
+        "leadhour": leadhour,
+        "chanweek": chanweek,
+        "firstpat": firstpat,
+        "compete": compete,
+        "serial": serial,
     }
     out = HERE / "data_booking.js"
     out.write_text("window.BOOK_DATA = " + json.dumps(payload, separators=(",", ":")) + ";\n")
