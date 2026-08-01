@@ -6,6 +6,7 @@
 <title>Doctor Slot Utilization Tracker — Prototype</title>
 <style>
 :root {
+  color-scheme: light;
   --surface-1:#fcfcfb; --page:#f9f9f7;
   --ink-1:#0b0b0b; --ink-2:#52514e; --ink-3:#898781;
   --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,0.10);
@@ -15,6 +16,7 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --surface-1:#1a1a19; --page:#0d0d0d;
     --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
     --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,0.10);
@@ -24,6 +26,7 @@
   }
 }
 :root[data-theme="dark"] {
+    color-scheme: dark;
     --surface-1:#1a1a19; --page:#0d0d0d;
     --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
     --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,0.10);
@@ -153,6 +156,10 @@ table.util.compact .cfgpill { padding:1px 4px; font-size:9px; }
 .dpre button { font:inherit; font-size:11px; padding:3px 8px; border:1px solid var(--border);
   border-radius:6px; background:var(--track); color:var(--ink-2); cursor:pointer; }
 .dpre button:hover { color:var(--ink-1); border-color:var(--acc); }
+:root[data-theme="dark"] input[type=date]::-webkit-calendar-picker-indicator { filter:invert(1) opacity(.75); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) input[type=date]::-webkit-calendar-picker-indicator { filter:invert(1) opacity(.75); }
+}
 </style>
 </head>
 <body>
