@@ -106,42 +106,56 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
 .tipbox th { font-size:10px; color:var(--ink-3); text-transform:uppercase; }
 .tipbox td:first-child, .tipbox th:first-child { text-align:left; color:var(--ink-2); }
 /* --- utilization table: grouped headers + aligned numeric columns --- */
-table.util { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums lining-nums; font-size:13px; }
+table.util { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums lining-nums; font-size:12.5px; }
 table.util th, table.util td { white-space:nowrap; }
-table.util thead th { font-weight:600; color:var(--ink-3); text-transform:uppercase; letter-spacing:.03em; }
-table.util thead tr.grp th { font-size:10px; padding:9px 10px 5px; text-align:center; border-bottom:1px solid var(--grid); }
+/* first column absorbs slack so numeric columns stay tight to their content */
+table.util thead th.dimh:first-child, table.util tbody td.lbl { width:100%; }
+table.util thead th { font-weight:600; color:var(--ink-3); text-transform:uppercase; letter-spacing:.02em; }
+table.util thead tr.grp th { font-size:9.5px; padding:7px 7px 4px; text-align:center; border-bottom:1px solid var(--grid); }
 table.util thead tr.grp th.dimh { text-align:left; vertical-align:bottom; border-bottom:1px solid var(--axis); }
-table.util thead tr.grp th .gsub { display:block; font-size:9px; font-weight:500; letter-spacing:0;
-  text-transform:none; color:var(--ink-3); opacity:.8; }
-table.util thead tr.sub th { font-size:9.5px; padding:4px 10px 7px; text-align:right;
+table.util thead tr.grp th.srt { cursor:pointer; user-select:none; }
+table.util thead tr.grp th.srt:hover { color:var(--ink-1); background:var(--track); }
+table.util thead tr.grp th.srt.on { color:var(--acc); }
+table.util thead tr.grp th .gsub { display:block; font-size:8.5px; font-weight:500; letter-spacing:0;
+  text-transform:none; color:var(--ink-3); opacity:.75; }
+table.util thead tr.grp th .car { font-size:8px; opacity:.9; }
+table.util thead tr.sub th { font-size:9px; padding:3px 7px 5px; text-align:right;
   border-bottom:1px solid var(--axis); color:var(--ink-3); }
-table.util tbody td { padding:7px 10px; text-align:right; border-bottom:1px solid var(--grid); }
-table.util tbody td.lbl { text-align:left; font-weight:650; color:var(--ink-1); }
-table.util tbody td.lbl .sub { display:block; font-size:10.5px; font-weight:500; color:var(--ink-3); margin-top:1px; }
+table.util tbody td { padding:5px 7px; text-align:right; border-bottom:1px solid var(--grid); }
+table.util tbody td.lbl { text-align:left; font-weight:650; color:var(--ink-1); font-size:12.5px; }
+table.util tbody td.lbl .prog { font-size:10px; font-weight:500; color:var(--ink-3); margin-left:6px; }
 table.util td.cfg { text-align:center; }
 table.util .gs { border-left:1px solid var(--grid); }
-table.util tbody td.mh, table.util thead th.mh { text-align:right; }
-table.util .mhwrap { display:inline-flex; align-items:baseline; justify-content:flex-end; }
-table.util .mhwrap .m { display:inline-block; min-width:44px; text-align:right; color:var(--ink-2); }
-table.util .mhwrap .sep { display:inline-block; width:15px; text-align:center; color:var(--ink-3); opacity:.45; }
-table.util .mhwrap .h { display:inline-block; min-width:46px; text-align:right; font-weight:650; color:var(--ink-1); }
-table.util thead .mhwrap .m, table.util thead .mhwrap .h { color:var(--ink-3); font-weight:600; }
-table.util tbody tr.tot .mhwrap .m { color:var(--ink-1); }
-table.util tbody td.zz .mhwrap .m, table.util tbody td.zz .mhwrap .h { opacity:.5; }
-table.util.compact .mhwrap .m { min-width:38px; }
-table.util.compact .mhwrap .h { min-width:40px; }
-table.util.compact .mhwrap .sep { width:12px; }
-table.util tbody td.cnt { color:var(--ink-2); }
-table.util tbody td.z { color:var(--ink-3); opacity:.55; }
+table.util tbody td.z, table.util tbody td.zz .mhwrap span { opacity:.45; }
 table.util tbody tr.rptstart td { border-top:2px solid var(--axis); }
 table.util tbody tr:hover td { background:var(--track); }
+table.util tbody tr.pin td { background:var(--acc-soft); }
+table.util tbody tr.pin td.lbl { box-shadow:inset 3px 0 0 var(--acc); }
+table.util tbody tr:not(.tot) { cursor:pointer; }
 table.util tbody tr.tot td { background:var(--page); font-weight:700; color:var(--ink-1);
-  border-top:2px solid var(--axis); border-bottom:0; padding-top:9px; padding-bottom:9px; }
+  border-top:2px solid var(--axis); border-bottom:0; padding:7px; }
 table.util tbody tr.tot:hover td { background:var(--page); }
 table.util tbody tr.na td { color:var(--ink-3); }
-table.util.compact thead tr.grp th { padding:8px 6px 4px; }
-table.util.compact thead tr.sub th { padding:3px 6px 6px; }
-table.util.compact tbody td { padding:6px 6px; font-size:12px; }
+table.util tbody td.mh, table.util thead th.mh { text-align:right; }
+table.util .mhwrap { display:inline-flex; align-items:baseline; justify-content:flex-end; }
+table.util .mhwrap .m { display:inline-block; min-width:32px; text-align:right; color:var(--ink-2); }
+table.util .mhwrap .sep { display:inline-block; width:11px; text-align:center; color:var(--ink-3); opacity:.4; }
+table.util .mhwrap .h { display:inline-block; min-width:34px; text-align:right; font-weight:650;
+  color:var(--ink-1); position:relative; }
+table.util tbody .mhwrap .h::after { content:''; position:absolute; left:0; right:0; bottom:-3px; height:2px;
+  background:var(--acc); border-radius:1px; transform:scaleX(var(--p,0)); transform-origin:right center; opacity:.5; }
+table.util thead .mhwrap .m, table.util thead .mhwrap .h { color:var(--ink-3); font-weight:600; }
+table.util tbody tr.tot .mhwrap .m { color:var(--ink-1); }
+table.util.compact { font-size:11.5px; }
+table.util.compact tbody td, table.util.compact tbody tr.tot td { padding:5px 5px; }
+table.util.compact .mhwrap .m { min-width:28px; }
+table.util.compact .mhwrap .h { min-width:31px; }
+table.util.compact .mhwrap .sep { width:9px; }
+table.util.compact .cfgpill { padding:1px 4px; font-size:9px; }
+.dpre { display:inline-flex; gap:3px; margin-left:8px; }
+.dpre button { font:inherit; font-size:11px; padding:3px 8px; border:1px solid var(--border);
+  border-radius:6px; background:var(--track); color:var(--ink-2); cursor:pointer; }
+.dpre button:hover { color:var(--ink-1); border-color:var(--acc); }
 </style>
 </head>
 <body>
@@ -468,7 +482,7 @@ table.util.compact tbody td { padding:6px 6px; font-size:12px; }
   }
 
   // ---------- Utilization tab (hours only, all doctors, date-filtered) ----------
-  let uFrom=null, uTo=null, uShowCounts=false, uDoc='';
+  let uFrom=null, uTo=null, uShowCounts=false, uDoc='', uSort={k:null,d:-1}, uPin=null;
   const OUT_KEYS = {c:'comp', n:'ns', r:'resch', x:'canc'};
   const cfgCache = {};
   function cfgFor(U, d){
@@ -503,11 +517,11 @@ table.util.compact tbody td { padding:6px 6px; font-size:12px; }
     ['SC','RPT'].forEach(t=>['Offline','Online'].forEach(ch=>['SH','MH'].forEach(pr=>ROWS.push([t,ch,pr]))));
     const fh = v => (Math.round(v*100)/100).toFixed(2);
     const fpu = v => v==null?'–':(v*100).toFixed(1)+'%';
-    const mhCell = m => `<span class="mhwrap"><span class="m">${Math.round(m).toLocaleString('en-IN')}</span>`
-      + `<span class="sep">|</span><span class="h">${fh(m/60)}</span></span>`;
+    const mhCell = (m, mx) => `<span class="mhwrap"><span class="m">${Math.round(m).toLocaleString('en-IN')}</span>`
+      + `<span class="sep">|</span><span class="h" style="--p:${(mx>0?Math.max(0,Math.min(1,m/mx)):0).toFixed(3)}">${fh(m/60)}</span></span>`;
     // totals: counts + minutes for booked / gross(comp+ns) / net(comp) / noshow(ns) / resch+canc
     const tot = {bookedC:0,bookedM:0, rcC:0, grossC:0,grossM:0, netC:0,netM:0, nsC:0,nsM:0};
-    const trs = ROWS.map(([t,ch,pr])=>{
+    const rowsData = ROWS.map(([t,ch,pr])=>{
       const cfgSet = new Set(activeDocs.map(d=>cfgFor(U,d)[`${t}|${pr}`]));
       const cfgLabel = cfgSet.size===0 ? '–' : (cfgSet.size===1 ? [...cfgSet][0]+' min' : 'varies');
       const o={comp:0,ns:0,resch:0,canc:0}, om={comp:0,ns:0,resch:0,canc:0};
@@ -517,53 +531,67 @@ table.util.compact tbody td { padding:6px 6px; font-size:12px; }
         o[k]+=a[6]; om[k]+=a[6]*cfgFor(U,a[0])[`${t}|${pr}`];
       });
       const bookedC = o.comp+o.ns+o.resch+o.canc, bookedM = om.comp+om.ns+om.resch+om.canc;
-      const grossC = o.comp+o.ns, grossM = om.comp+om.ns;
-      const rcC = o.resch+o.canc;
+      const grossC = o.comp+o.ns, grossM = om.comp+om.ns, rcC = o.resch+o.canc;
       tot.bookedC+=bookedC; tot.bookedM+=bookedM; tot.rcC+=rcC;
       tot.grossC+=grossC; tot.grossM+=grossM;
       tot.netC+=o.comp; tot.netM+=om.comp;
       tot.nsC+=o.ns; tot.nsM+=om.ns;
-      const PG = uShowCounts ? 2 : 1;            // columns per metric group
-      const isRptStart = (t==='RPT' && ch==='Offline' && pr==='SH') ? ' rptstart' : '';
-      const nm = { SC:'SC', RPT:'Repeat' }[t];
-      const pn = { SH:'Sexual Health', MH:'Mental Health' }[pr];
-      if (bookedC===0 && !capable(t,ch)){
-        return `<tr class="na${isRptStart}">
-          <td class="lbl">${nm} · ${ch}<span class="sub">${pn}</span></td>
-          <td class="cfg"><span class="cfgpill">${cfgLabel}</span></td>
-          <td class="gs" colspan="${PG*4+1}" style="text-align:left">Not offered — no roster blocks map ${t} to ${ch.toLowerCase()} in this selection</td></tr>`;
+      return {t,ch,pr,cfgLabel,bookedC,bookedM,grossC,grossM,rcC,
+              netC:o.comp,netM:om.comp,nsC:o.ns,nsM:om.ns,
+              na: bookedC===0 && !capable(t,ch),
+              key:`${t}|${ch}|${pr}`};
+    });
+    const PG = uShowCounts ? 2 : 1;
+    const SORTM = {booked:'bookedM', gross:'grossM', net:'netM', ns:'nsM', rc:'rcC'};
+    let ordered = rowsData;
+    if (uSort.k){
+      ordered = rowsData.slice().sort((a,b)=>(a[SORTM[uSort.k]]-b[SORTM[uSort.k]])*uSort.d);
+    }
+    const MX = ['bookedM','grossM','netM','nsM'].reduce((a,k)=>{
+      a[k] = rowsData.reduce((mx,r)=>Math.max(mx, r[k]), 0); return a; }, {});
+    const trs = ordered.map(r=>{
+      const nm = { SC:'SC', RPT:'Repeat' }[r.t];
+      const pn = { SH:'Sexual Health', MH:'Mental Health' }[r.pr];
+      const label = `${nm} · ${r.ch}<span class="prog">${pn}</span>`;
+      const rptStart = (!uSort.k && r.t==='RPT' && r.ch==='Offline' && r.pr==='SH') ? ' rptstart' : '';
+      const pinned = uPin===r.key ? ' pin' : '';
+      if (r.na){
+        return `<tr class="na${rptStart}${pinned}" data-k="${r.key}">
+          <td class="lbl">${label}</td>
+          <td class="cfg"><span class="cfgpill">${r.cfgLabel}</span></td>
+          <td class="gs" colspan="${PG*4+1}" style="text-align:left">Not offered — no roster blocks map ${r.t} to ${r.ch.toLowerCase()} in this selection</td></tr>`;
       }
-      const grp = (c,m,first) => (uShowCounts ? `<td class="cnt${first?' gs':''}${c===0?' z':''}">${c}</td>` : '')
-        + `<td class="mh${(!uShowCounts&&first)?' gs':''}${m===0?' zz':''}">${mhCell(m)}</td>`;
-      return `<tr class="${isRptStart}">
-        <td class="lbl">${nm} · ${ch}<span class="sub">${pn}</span></td>
-        <td class="cfg"><span class="cfgpill">${cfgLabel}</span></td>
-        ${grp(bookedC, bookedM, true)}
-        <td class="cnt gs${rcC===0?' z':''}">${rcC}</td>
-        ${grp(grossC, grossM, true)}
-        ${grp(o.comp, om.comp, true)}
-        ${grp(o.ns, om.ns, true)}
+      const grp = (c,m,mx,first) => (uShowCounts ? `<td class="cnt${first?' gs':''}${c===0?' z':''}">${c}</td>` : '')
+        + `<td class="mh${(!uShowCounts&&first)?' gs':''}${m===0?' zz':''}">${mhCell(m,mx)}</td>`;
+      return `<tr class="${rptStart}${pinned}" data-k="${r.key}">
+        <td class="lbl">${label}</td>
+        <td class="cfg"><span class="cfgpill">${r.cfgLabel}</span></td>
+        ${grp(r.bookedC, r.bookedM, MX.bookedM, true)}
+        <td class="cnt gs${r.rcC===0?' z':''}">${r.rcC}</td>
+        ${grp(r.grossC, r.grossM, MX.grossM, true)}
+        ${grp(r.netC, r.netM, MX.netM, true)}
+        ${grp(r.nsC, r.nsM, MX.nsM, true)}
       </tr>`;
     }).join('');
-    const PG = uShowCounts ? 2 : 1;
-    const gHead = (title, sub) => `<th class="gs" colspan="${PG}">${title}${sub?`<span class="gsub">${sub}</span>`:''}</th>`;
+    const car = k => uSort.k===k ? `<span class="car">${uSort.d<0?'▼':'▲'}</span>` : '';
+    const gHead = (title, sub, k) => `<th class="gs srt${uSort.k===k?' on':''}" data-s="${k}" colspan="${PG}" title="Click to sort">${title} ${car(k)}${sub?`<span class="gsub">${sub}</span>`:''}</th>`;
     const mhHead = '<span class="mhwrap"><span class="m">Mins</span><span class="sep">|</span><span class="h">Hrs</span></span>';
     const sHead = () => (uShowCounts ? `<th class="gs">#</th><th class="mh">${mhHead}</th>`
                                      : `<th class="gs mh">${mhHead}</th>`);
     const tHead = `<thead>
       <tr class="grp">
-        <th class="dimh" rowspan="2">Metric</th>
+        <th class="dimh srt${uSort.k===null?' on':''}" data-s="" rowspan="2" title="Reset to default order">Metric</th>
         <th class="dimh" rowspan="2" style="text-align:center">Slot<span class="gsub">config</span></th>
-        ${gHead('Booked','all bookings')}
-        <th class="gs" rowspan="2" style="vertical-align:bottom;text-align:right">Resch +<br>Canc</th>
-        ${gHead('Gross','completed + no-show')}
-        ${gHead('Net','completed')}
-        ${gHead('No-show','burned time')}
+        ${gHead('Booked','all bookings','booked')}
+        <th class="gs srt${uSort.k==='rc'?' on':''}" data-s="rc" rowspan="2" style="vertical-align:bottom;text-align:right" title="Click to sort">Resch +<br>Canc ${car('rc')}</th>
+        ${gHead('Gross','completed + no-show','gross')}
+        ${gHead('Net','completed','net')}
+        ${gHead('No-show','burned time','ns')}
       </tr>
       <tr class="sub">${sHead()}${sHead()}${sHead()}${sHead()}</tr>
     </thead>`;
     const tG = (c,m,first) => (uShowCounts ? `<td class="${first?'gs':''}">${c.toLocaleString('en-IN')}</td>` : '')
-      + `<td class="mh${(!uShowCounts&&first)?' gs':''}">${mhCell(m)}</td>`;
+      + `<td class="mh${(!uShowCounts&&first)?' gs':''}">${mhCell(m,0)}</td>`;
     const tableHtml = `<div class="matrixcard"><table class="util${uShowCounts?' compact':''}">
       ${tHead}
       <tbody>${trs}
@@ -608,6 +636,7 @@ table.util.compact tbody td { padding:6px 6px; font-size:12px; }
        <datalist id="uDocList">${opts}</datalist>
        &nbsp; <b>Date:</b> <input type="date" id="uFrom" value="${uFrom}" style="font:inherit;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--page);color:var(--ink-1)">
        – <input type="date" id="uTo" value="${uTo}" style="font:inherit;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--page);color:var(--ink-1)">
+       <span class="dpre" id="uPre"><button data-p="1">Last day</button><button data-p="7">7d</button><button data-p="30">30d</button><button data-p="mtd">MTD</button></span>
        <button id="uCounts" style="float:right;font:inherit;font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:7px;background:var(--track);color:var(--ink-2);cursor:pointer">${uShowCounts?'Hide counts ▾':'Show counts ▸'}</button>`;
     const bind = id => document.getElementById(id).addEventListener('change', e=>{
       if (id==='uFrom') uFrom = e.target.value; else uTo = e.target.value;
@@ -623,6 +652,32 @@ table.util.compact tbody td { padding:6px 6px; font-size:12px; }
       if (i>=0){ uDoc=String(i); renderTabU(); }
     });
     document.getElementById('uCounts').addEventListener('click', ()=>{ uShowCounts=!uShowCounts; renderTabU(); });
+    // sort by any metric group (click again to flip, Metric header resets)
+    document.querySelectorAll('#content .util thead th.srt').forEach(th=>th.addEventListener('click', ()=>{
+      const k = th.dataset.s || null;
+      if (k===null) uSort={k:null,d:-1};
+      else if (uSort.k===k) uSort.d = -uSort.d;
+      else uSort={k, d:-1};
+      renderTabU();
+    }));
+    // click a row to pin/highlight it
+    document.querySelectorAll('#content .util tbody tr[data-k]').forEach(tr=>tr.addEventListener('click', ()=>{
+      uPin = (uPin===tr.dataset.k) ? null : tr.dataset.k;
+      renderTabU();
+    }));
+    // quick date presets
+    document.querySelectorAll('#uPre button').forEach(b=>b.addEventListener('click', ()=>{
+      const days = U.blocks.map(x=>x[1]).filter(d=>d<new Date().toISOString().slice(0,10));
+      const last = days.length ? days.reduce((mx,d)=>d>mx?d:mx,'0') : uTo;
+      const p = b.dataset.p;
+      if (p==='mtd'){ uTo = last; uFrom = last.slice(0,8)+'01'; }
+      else {
+        const n = +p; const d0 = new Date(last+'T00:00:00'); d0.setDate(d0.getDate()-(n-1));
+        uFrom = `${d0.getFullYear()}-${String(d0.getMonth()+1).padStart(2,'0')}-${String(d0.getDate()).padStart(2,'0')}`;
+        uTo = last;
+      }
+      renderTabU();
+    }));
   }
 
   function render(){
