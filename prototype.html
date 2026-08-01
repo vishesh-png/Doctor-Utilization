@@ -120,8 +120,17 @@ table.util tbody td.lbl { text-align:left; font-weight:650; color:var(--ink-1); 
 table.util tbody td.lbl .sub { display:block; font-size:10.5px; font-weight:500; color:var(--ink-3); margin-top:1px; }
 table.util td.cfg { text-align:center; }
 table.util .gs { border-left:1px solid var(--grid); }
-table.util tbody td.hrs { font-weight:650; color:var(--ink-1); }
-table.util tbody td.mins { color:var(--ink-2); }
+table.util tbody td.mh, table.util thead th.mh { text-align:right; }
+table.util .mhwrap { display:inline-flex; align-items:baseline; justify-content:flex-end; }
+table.util .mhwrap .m { display:inline-block; min-width:44px; text-align:right; color:var(--ink-2); }
+table.util .mhwrap .sep { display:inline-block; width:15px; text-align:center; color:var(--ink-3); opacity:.45; }
+table.util .mhwrap .h { display:inline-block; min-width:46px; text-align:right; font-weight:650; color:var(--ink-1); }
+table.util thead .mhwrap .m, table.util thead .mhwrap .h { color:var(--ink-3); font-weight:600; }
+table.util tbody tr.tot .mhwrap .m { color:var(--ink-1); }
+table.util tbody td.zz .mhwrap .m, table.util tbody td.zz .mhwrap .h { opacity:.5; }
+table.util.compact .mhwrap .m { min-width:38px; }
+table.util.compact .mhwrap .h { min-width:40px; }
+table.util.compact .mhwrap .sep { width:12px; }
 table.util tbody td.cnt { color:var(--ink-2); }
 table.util tbody td.z { color:var(--ink-3); opacity:.55; }
 table.util tbody tr.rptstart td { border-top:2px solid var(--axis); }
@@ -494,7 +503,8 @@ table.util.compact tbody td { padding:6px 6px; font-size:12px; }
     ['SC','RPT'].forEach(t=>['Offline','Online'].forEach(ch=>['SH','MH'].forEach(pr=>ROWS.push([t,ch,pr]))));
     const fh = v => (Math.round(v*100)/100).toFixed(2);
     const fpu = v => v==null?'–':(v*100).toFixed(1)+'%';
-    const mh = m => `${Math.round(m)}m&nbsp;|&nbsp;${fh(m/60)}h`;  // "(mins | hours)" cell
+    const mhCell = m => `<span class="mhwrap"><span class="m">${Math.round(m).toLocaleString('en-IN')}</span>`
+      + `<span class="sep">|</span><span class="h">${fh(m/60)}</span></span>`;
     // totals: counts + minutes for booked / gross(comp+ns) / net(comp) / noshow(ns) / resch+canc
     const tot = {bookedC:0,bookedM:0, rcC:0, grossC:0,grossM:0, netC:0,netM:0, nsC:0,nsM:0};
     const trs = ROWS.map(([t,ch,pr])=>{
@@ -513,7 +523,7 @@ table.util.compact tbody td { padding:6px 6px; font-size:12px; }
       tot.grossC+=grossC; tot.grossM+=grossM;
       tot.netC+=o.comp; tot.netM+=om.comp;
       tot.nsC+=o.ns; tot.nsM+=om.ns;
-      const PG = uShowCounts ? 3 : 2;            // columns per metric group
+      const PG = uShowCounts ? 2 : 1;            // columns per metric group
       const isRptStart = (t==='RPT' && ch==='Offline' && pr==='SH') ? ' rptstart' : '';
       const nm = { SC:'SC', RPT:'Repeat' }[t];
       const pn = { SH:'Sexual Health', MH:'Mental Health' }[pr];
@@ -523,10 +533,8 @@ table.util.compact tbody td { padding:6px 6px; font-size:12px; }
           <td class="cfg"><span class="cfgpill">${cfgLabel}</span></td>
           <td class="gs" colspan="${PG*4+1}" style="text-align:left">Not offered — no roster blocks map ${t} to ${ch.toLowerCase()} in this selection</td></tr>`;
       }
-      const num = (v,cls) => `<td class="${cls}${v===0?' z':''}">${v===0?'0':v.toLocaleString('en-IN')}</td>`;
       const grp = (c,m,first) => (uShowCounts ? `<td class="cnt${first?' gs':''}${c===0?' z':''}">${c}</td>` : '')
-        + `<td class="mins${(!uShowCounts&&first)?' gs':''}${m===0?' z':''}">${Math.round(m).toLocaleString('en-IN')}</td>`
-        + `<td class="hrs${m===0?' z':''}">${fh(m/60)}</td>`;
+        + `<td class="mh${(!uShowCounts&&first)?' gs':''}${m===0?' zz':''}">${mhCell(m)}</td>`;
       return `<tr class="${isRptStart}">
         <td class="lbl">${nm} · ${ch}<span class="sub">${pn}</span></td>
         <td class="cfg"><span class="cfgpill">${cfgLabel}</span></td>
@@ -537,9 +545,11 @@ table.util.compact tbody td { padding:6px 6px; font-size:12px; }
         ${grp(o.ns, om.ns, true)}
       </tr>`;
     }).join('');
-    const PG = uShowCounts ? 3 : 2;
+    const PG = uShowCounts ? 2 : 1;
     const gHead = (title, sub) => `<th class="gs" colspan="${PG}">${title}${sub?`<span class="gsub">${sub}</span>`:''}</th>`;
-    const sHead = () => (uShowCounts ? '<th class="gs">#</th><th>Mins</th>' : '<th class="gs">Mins</th>') + '<th>Hrs</th>';
+    const mhHead = '<span class="mhwrap"><span class="m">Mins</span><span class="sep">|</span><span class="h">Hrs</span></span>';
+    const sHead = () => (uShowCounts ? `<th class="gs">#</th><th class="mh">${mhHead}</th>`
+                                     : `<th class="gs mh">${mhHead}</th>`);
     const tHead = `<thead>
       <tr class="grp">
         <th class="dimh" rowspan="2">Metric</th>
@@ -553,8 +563,7 @@ table.util.compact tbody td { padding:6px 6px; font-size:12px; }
       <tr class="sub">${sHead()}${sHead()}${sHead()}${sHead()}</tr>
     </thead>`;
     const tG = (c,m,first) => (uShowCounts ? `<td class="${first?'gs':''}">${c.toLocaleString('en-IN')}</td>` : '')
-      + `<td class="${(!uShowCounts&&first)?'gs':''}">${Math.round(m).toLocaleString('en-IN')}</td>`
-      + `<td>${fh(m/60)}</td>`;
+      + `<td class="mh${(!uShowCounts&&first)?' gs':''}">${mhCell(m)}</td>`;
     const tableHtml = `<div class="matrixcard"><table class="util${uShowCounts?' compact':''}">
       ${tHead}
       <tbody>${trs}
