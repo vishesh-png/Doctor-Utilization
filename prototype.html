@@ -119,9 +119,9 @@ table.util thead tr.grp th.srt.on { color:var(--acc); }
 table.util thead tr.grp th .gsub { display:block; font-size:8.5px; font-weight:500; letter-spacing:0;
   text-transform:none; color:var(--ink-3); opacity:.75; }
 table.util thead tr.grp th .car { font-size:8px; opacity:.9; }
-table.util thead tr.sub th { font-size:9px; padding:3px 12px 5px; text-align:right;
+table.util thead tr.sub th { font-size:9px; padding:3px 12px 5px; text-align:center;
   border-bottom:1px solid var(--axis); color:var(--ink-3); }
-table.util tbody td { padding:6px 12px; text-align:right; border-bottom:1px solid var(--grid); }
+table.util tbody td { padding:6px 12px; text-align:center; border-bottom:1px solid var(--grid); }
 table.util tbody td.lbl { text-align:left; font-weight:650; color:var(--ink-1); font-size:12.5px; }
 table.util tbody td.lbl .prog { font-size:10px; font-weight:500; color:var(--ink-3); margin-left:6px; }
 table.util td.cfg { text-align:center; }
@@ -136,7 +136,7 @@ table.util tbody tr.tot td { background:var(--page); font-weight:700; color:var(
   border-top:2px solid var(--axis); border-bottom:0; padding:7px; }
 table.util tbody tr.tot:hover td { background:var(--page); }
 table.util tbody tr.na td { color:var(--ink-3); }
-table.util tbody td.mh, table.util thead th.mh { text-align:right; }
+table.util tbody td.mh, table.util thead th.mh { text-align:center; }
 table.util .mhwrap { display:inline-flex; align-items:baseline; justify-content:flex-end; }
 table.util .mhwrap .m { display:inline-block; min-width:44px; text-align:right; color:var(--ink-2); }
 table.util .mhwrap .sep { display:inline-block; width:14px; text-align:center; color:var(--ink-3); opacity:.4; }
@@ -578,7 +578,7 @@ table.util.compact .cfgpill { padding:1px 4px; font-size:9px; }
         <th class="dimh srt${uSort.k===null?' on':''}" data-s="" rowspan="2" title="Reset to default order">Metric</th>
         <th class="dimh" rowspan="2" style="text-align:center">Slot<span class="gsub">config</span></th>
         ${gHead('Booked','all bookings','booked')}
-        <th class="gs srt${uSort.k==='rc'?' on':''}" data-s="rc" rowspan="2" style="vertical-align:bottom;text-align:right" title="Click to sort">Resch +<br>Canc ${car('rc')}</th>
+        <th class="gs srt${uSort.k==='rc'?' on':''}" data-s="rc" rowspan="2" style="vertical-align:bottom;text-align:center" title="Click to sort">Resch +<br>Canc ${car('rc')}</th>
         ${gHead('Gross','completed + no-show','gross')}
         ${gHead('Net','completed','net')}
         ${gHead('No-show','burned time','ns')}
