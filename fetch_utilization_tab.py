@@ -86,6 +86,40 @@ JOIN allo_persons.providers p ON c.provider_id=p.id AND {DOC_FILTER}
 WHERE c.deleted_at IS NULL AND t.code IN ('SC','FU','RR','PQ')
 GROUP BY 1,2,3"""
 
+# shrinkage = non-bookable blocks (is_bookable=0) that fall inside a bookable
+# window, i.e. roster time the doctor gave back. Intervals are de-duplicated and
+# clipped to the bookable window before summing, and capped per day so shrinkage
+# can never exceed the block itself.
+Q_SHRINK = f"""WITH bk AS (
+  SELECT DISTINCT b.provider_id, b.start_time, b.end_time,
+         CAST(DATEADD(minute,330,b.start_time) AS DATE) AS dt
+  FROM allo_consultations.appointment_blocks b
+  JOIN allo_persons.providers p ON b.provider_id=p.id AND {DOC_FILTER}
+  WHERE b.deleted_at IS NULL AND b.is_bookable=1
+    AND DATEADD(minute,330,b.start_time) >= DATEADD(day,-60,CURRENT_DATE)
+),
+nb AS (
+  SELECT DISTINCT b.provider_id, b.start_time, b.end_time
+  FROM allo_consultations.appointment_blocks b
+  JOIN allo_persons.providers p ON b.provider_id=p.id AND {DOC_FILTER}
+  WHERE b.deleted_at IS NULL AND b.is_bookable=0
+    AND DATEADD(minute,330,b.end_time) >= DATEADD(day,-60,CURRENT_DATE)
+)
+SELECT provider_id, dt, SUM(overlap_mins) AS mins FROM (
+  SELECT bk.provider_id, bk.dt, bk.start_time, bk.end_time,
+         SUM(GREATEST(0, DATEDIFF(minute,
+             GREATEST(bk.start_time, nb.start_time),
+             LEAST(bk.end_time, nb.end_time)))) AS raw_mins,
+         LEAST(SUM(GREATEST(0, DATEDIFF(minute,
+             GREATEST(bk.start_time, nb.start_time),
+             LEAST(bk.end_time, nb.end_time)))),
+               DATEDIFF(minute, bk.start_time, bk.end_time)) AS overlap_mins
+  FROM bk JOIN nb
+    ON nb.provider_id = bk.provider_id
+   AND nb.start_time < bk.end_time AND nb.end_time > bk.start_time
+  GROUP BY 1,2,3,4
+) x GROUP BY 1,2"""
+
 Q_CAP = f"""SELECT b.provider_id, CAST(DATEADD(minute,330,b.start_time) AS DATE) AS dt,
   CASE WHEN t.code='SC' THEN 'SC' ELSE 'RPT' END AS typ,
   MAX(CASE WHEN abtm.offline_location_id IS NOT NULL THEN 1 ELSE 0 END) AS has_off,
@@ -134,6 +168,7 @@ def main():
         return idx[pid]
 
     blocks = [[di(r[0], r[1]), str(r[2])[:10], r[3]] for r in block_rows]
+    shrink = [[di(r[0]), str(r[1])[:10], r[2]] for r in run_query(Q_SHRINK, "shrinkage") if r[0] in idx]
     configs = [[di(r[0]), r[1], r[2], r[3]] for r in cfg_rows if r[0] in idx]
     caps = [[di(r[0]), str(r[1])[:10], r[2], r[3], r[4]] for r in cap_rows if r[0] in idx]
     appts = [[di(r[0]), str(r[1])[:10], r[2], r[3], r[4], r[5], r[6]]
@@ -142,7 +177,8 @@ def main():
     payload = {
         "updated": datetime.now().strftime("%Y-%m-%d %H:%M IST"),
         "doctors": docs,
-        "blocks": blocks,   # [docIdx, dt, mins]
+        "blocks": blocks,   # [docIdx, dt, mins]  (gross bookable block time)
+        "shrink": shrink,   # [docIdx, dt, mins]  (non-bookable time inside those blocks)
         "configs": configs, # [docIdx, typeCode, program, mins]
         "caps": caps,       # [docIdx, dt, typ, has_off, has_on]
         "appts": appts,     # [docIdx, dt, typ, channel, program, outcome, n]
