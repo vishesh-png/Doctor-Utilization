@@ -14,7 +14,7 @@
   --track:#f0efec;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --surface-1:#1a1a19; --page:#0d0d0d;
     --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
     --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,0.10);
@@ -22,6 +22,14 @@
     --net:#199e70;
     --track:#2c2c2a;
   }
+}
+:root[data-theme="dark"] {
+    --surface-1:#1a1a19; --page:#0d0d0d;
+    --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
+    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,0.10);
+    --acc:#3987e5; --acc-soft:#104281;
+    --net:#199e70;
+    --track:#2c2c2a;
 }
 * { box-sizing:border-box; }
 body { margin:0; background:var(--page); color:var(--ink-1);
@@ -120,6 +128,11 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
       <button data-m="slot" class="on">Slot Level</button>
       <button data-m="hour">Hour Level</button>
     </div>
+    <div class="toggle" id="themeToggle" style="margin-left:0">
+      <button data-th="auto">Auto</button>
+      <button data-th="light">☀ Light</button>
+      <button data-th="dark">☾ Dark</button>
+    </div>
   </div>
 
   <div class="exec" id="exec"></div>
@@ -131,6 +144,19 @@ tr.hasTip td b.tt { border-bottom:1px dashed var(--axis); cursor:help; }
 <script src="data_prototype.js"></script>
 <script src="data_utilz.js"></script>
 <script>
+(function(){
+  const KEY='proto-theme';
+  const btns = document.querySelectorAll('#themeToggle button');
+  function applyTheme(t){
+    if (t==='auto') delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = t;
+    btns.forEach(b=>b.classList.toggle('on', b.dataset.th===t));
+    try{ localStorage.setItem(KEY,t); }catch(e){}
+  }
+  btns.forEach(b=>b.addEventListener('click',()=>applyTheme(b.dataset.th)));
+  let saved='auto'; try{ saved=localStorage.getItem(KEY)||'auto'; }catch(e){}
+  applyTheme(saved);
+})();
 (function(){
   const D = window.PROTO_DATA;
   if (!D){ document.body.innerHTML = '<p style="padding:40px">No data — run fetch_prototype_data.py</p>'; return; }
