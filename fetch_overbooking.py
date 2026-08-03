@@ -133,6 +133,22 @@ LEFT JOIN (
 ) f ON f.id = rel.id
 GROUP BY 1,2,3,4,5"""
 
+# reschedule timing matrix: WHEN it was booked x WHEN it was moved (notice before the slot)
+NOTICE = """DATEDIFF(day, CAST(DATEADD(minute,330,COALESCE(ap.rescheduled_at, ap.updated_at)) AS DATE),
+                          CAST(DATEADD(minute,330,ap.start_time) AS DATE))"""
+Q_RESMX = f"""SELECT ap.provider_id, {TYP} AS typ, {CHAN} AS channel, {PROG} AS program,
+  {BUCKET} AS book_bucket,
+  CASE WHEN {NOTICE} < 0 THEN 0            -- moved after the slot had already passed
+       WHEN {NOTICE} = 0 THEN 1            -- same day as the slot
+       WHEN {NOTICE} = 1 THEN 2
+       WHEN {NOTICE} = 2 THEN 3
+       WHEN {NOTICE} <= 4 THEN 4
+       WHEN {NOTICE} <= 7 THEN 5
+       ELSE 6 END AS notice_bucket,
+  COUNT(*) AS n
+{BASE} AND ap.status='RESCHEDULED'
+GROUP BY 1,2,3,4,5,6"""
+
 Q_DOW = f"""SELECT ap.provider_id, EXTRACT(DOW FROM DATEADD(minute,330,ap.start_time)) AS dow,
   {OUTCOME} AS outcome, COUNT(*) AS n
 {BASE} GROUP BY 1,2,3"""
@@ -154,11 +170,13 @@ def main():
     cohort = [[di(r[0], r[1]), r[2], r[3], r[4], int(r[5]), r[6], int(r[7]), r[8]] for r in coh]
     refill = [[di(r[0]), r[1], r[2], r[3], int(r[4]), r[5], r[6]]
               for r in run_query(Q_REFILL, "release refill") if r[0] in idx]
+    resmx = [[di(r[0]), r[1], r[2], r[3], int(r[4]), int(r[5]), r[6]]
+             for r in run_query(Q_RESMX, "reschedule timing matrix") if r[0] in idx]
     dow = [[di(r[0]), int(r[1]), r[2], r[3]] for r in run_query(Q_DOW, "weekday") if r[0] in idx]
     hour = [[di(r[0]), int(r[1]), r[2], r[3]] for r in run_query(Q_HOUR, "hour") if r[0] in idx]
 
     payload = {"updated": datetime.now().strftime("%Y-%m-%d %H:%M IST"), "days": DAYS,
-               "doctors": docs, "cohort": cohort, "refill": refill, "dow": dow, "hour": hour}
+               "doctors": docs, "cohort": cohort, "refill": refill, "resmx": resmx, "dow": dow, "hour": hour}
     out = HERE / "data_overbook.js"
     out.write_text("window.OB_DATA = " + json.dumps(payload, separators=(",", ":")) + ";\n")
     sys.stderr.write(f"[done] {len(docs)} doctors -> {out}\n")
