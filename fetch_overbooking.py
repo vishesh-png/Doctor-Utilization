@@ -90,12 +90,15 @@ BUCKET = f"""CASE WHEN {LEADD} <= 0 THEN 0
                   WHEN {LEADD} <= 7 THEN 4
                   WHEN {LEADD} <= 14 THEN 5
                   ELSE 6 END"""
-OUTCOME = """CASE WHEN ap.status='COMPLETED' THEN 'c'
-             WHEN ap.status='MISSED' OR ap.updated_at > ap.start_time THEN 'n'
-             WHEN ap.status='RESCHEDULED' THEN 'r'
-             WHEN ap.status='CANCELLED' THEN 'x' END"""
-LATE = """CASE WHEN ap.status IN ('RESCHEDULED','CANCELLED')
-           AND DATEDIFF(hour, COALESCE(ap.rescheduled_at, ap.updated_at), ap.start_time) < 24
+MOVED = "COALESCE(ap.rescheduled_at, ap.updated_at)"
+OUTCOME = f"""CASE WHEN ap.status='COMPLETED' THEN 'c'
+             WHEN ap.status='MISSED' THEN 'n'
+             WHEN ap.status='RESCHEDULED' AND {MOVED} < ap.start_time THEN 'r'
+             WHEN ap.status='CANCELLED'   AND {MOVED} < ap.start_time THEN 'x'
+             ELSE 'n' END"""
+LATE = f"""CASE WHEN ap.status IN ('RESCHEDULED','CANCELLED')
+           AND {MOVED} < ap.start_time
+           AND DATEDIFF(hour, {MOVED}, ap.start_time) < 24
           THEN 1 ELSE 0 END"""
 TYP = "CASE WHEN t.code='SC' THEN 'SC' ELSE 'RPT' END"
 CHAN = "CASE WHEN ap.mode='offline' THEN 'Offline' ELSE 'Online' END"
@@ -138,15 +141,14 @@ NOTICE = """DATEDIFF(day, CAST(DATEADD(minute,330,COALESCE(ap.rescheduled_at, ap
                           CAST(DATEADD(minute,330,ap.start_time) AS DATE))"""
 Q_RESMX = f"""SELECT ap.provider_id, {TYP} AS typ, {CHAN} AS channel, {PROG} AS program,
   {BUCKET} AS book_bucket,
-  CASE WHEN {NOTICE} < 0 THEN 0            -- moved after the slot had already passed
-       WHEN {NOTICE} = 0 THEN 1            -- same day as the slot
+  CASE WHEN {NOTICE} = 0 THEN 1            -- same day as the slot
        WHEN {NOTICE} = 1 THEN 2
        WHEN {NOTICE} = 2 THEN 3
        WHEN {NOTICE} <= 4 THEN 4
        WHEN {NOTICE} <= 7 THEN 5
        ELSE 6 END AS notice_bucket,
   COUNT(*) AS n
-{BASE} AND ap.status='RESCHEDULED'
+{BASE} AND ap.status='RESCHEDULED' AND {MOVED} < ap.start_time
 GROUP BY 1,2,3,4,5,6"""
 
 Q_DOW = f"""SELECT ap.provider_id, EXTRACT(DOW FROM DATEADD(minute,330,ap.start_time)) AS dow,
