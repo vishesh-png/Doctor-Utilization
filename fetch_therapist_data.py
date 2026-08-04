@@ -26,6 +26,24 @@ Two guards, applied in order:
 Appointments are credited to the SURVIVING slots only, so numerator and
 denominator always describe the same grid.
 
+SHRINKAGE:
+`rs.overlaps_non_bookable_block = 1` marks a generated slot that was later
+covered by an is_bookable=0 block — leave, break, meeting, ad-hoc block-off.
+Those slots are always is_booked=0 AND available_for_booking=0: the roster
+opened the time, then took it back. This script emits them as their own
+measure so the identity holds exactly:
+
+    offered  = every slot the roster generated  (sh_slots + slots)
+    shrinkage = slots withdrawn as non-bookable (sh_slots / sh_min)
+    available = offered - shrinkage             (slots / mins)
+
+`slots`/`mins` are AVAILABLE and stay the denominator for gross and net
+utilization — that was already true before shrinkage was exposed, because the
+old query filtered `overlaps_non_bookable_block = 0` up front. Surfacing the
+three numbers does not move any percentage; it makes the subtraction visible
+and recovers 109 therapist-days that were previously dropped silently (a fully
+blocked day used to vanish from the table rather than show as 100% shrunk).
+
 Auth: AWS profile `redshift-data` (SSO). If expired: aws sso login --profile redshift-data
 Usage: python3 fetch_therapist_data.py
 """
@@ -63,6 +81,7 @@ blk_loc AS (
 raw_slots AS (
   SELECT DISTINCT rs.provider_id, pro.name AS therapist,
     rs.start_time, rs.end_time,
+    rs.overlaps_non_bookable_block AS shrunk,
     CASE WHEN b.has_off=1 AND b.has_on=1 THEN 'Both'
          WHEN b.has_off=1 THEN 'Offline' ELSE 'Online' END AS channel
   FROM allo_consultations.roster_slots rs
@@ -74,16 +93,24 @@ raw_slots AS (
                  AND bl.block_location_id = rs.location_id
   WHERE rs.type_id = '{TH}'
     AND DATEADD(minute, 330, rs.start_time) >= DATEADD(month, -2, CURRENT_DATE)
-    AND rs.overlaps_non_bookable_block = 0
     AND rs.is_realized = 1
-    AND ((rs.is_booked = 1 AND rs.overlaps_other_booked_type = 0)
+    -- shrunk slots are kept as their own bucket (they are always
+    -- is_booked=0 AND available_for_booking=0, so they need their own leg)
+    AND (rs.overlaps_non_bookable_block = 1
+         OR (rs.is_booked = 1 AND rs.overlaps_other_booked_type = 0)
          OR rs.available_for_booking = 1))
-SELECT provider_id, therapist, channel,
+SELECT provider_id, therapist, channel, shrunk,
        DATEADD(minute,330,start_time) AS slot_start,
        DATEADD(minute,330,end_time)   AS slot_end,
        DATEDIFF(minute,start_time,end_time) AS slot_duration
 FROM (SELECT r.*, ROW_NUMBER() OVER (PARTITION BY provider_id, start_time
-                                     ORDER BY end_time DESC) AS rn
+                                     -- a still-bookable slot always beats a
+                                     -- shrunk twin at the same start time.
+                                     -- channel breaks the remaining tie so two
+                                     -- blocks covering one start always resolve
+                                     -- the same way (else the Offline/Online
+                                     -- split drifts between runs)
+                                     ORDER BY shrunk ASC, end_time DESC, channel) AS rn
       FROM raw_slots r) x
 WHERE rn = 1
 ORDER BY provider_id, slot_start"""
@@ -169,12 +196,17 @@ def tile(slots):
 
     `roster_slots` can still hold two durations for the same window after the
     program-matched join (a 30-min and a 40-min grid over the same block). A
-    therapist can only be in one of them, so sweep by start time, prefer the
-    longer slot on ties, and drop anything that starts before the last kept
-    slot ends. Returns the kept slots in start order.
+    therapist can only be in one of them, so sweep by start time, prefer a
+    still-bookable slot over a shrunk one and then the longer slot, and drop
+    anything that starts before the last kept slot ends. Returns the kept slots
+    in start order.
+
+    Shrunk slots compete in the same sweep on purpose: they occupy real wall
+    clock, so letting them tile alongside the bookable ones keeps
+    offered = available + shrinkage true per therapist-day.
     """
     kept, last_end = [], None
-    for s in sorted(slots, key=lambda s: (s["start"], -s["dur"])):
+    for s in sorted(slots, key=lambda s: (s["start"], s["shrunk"], -s["dur"])):
         if last_end is not None and s["start"] < last_end:
             continue
         kept.append(s)
@@ -193,18 +225,25 @@ def main():
 
     # ---- candidate slots -> one non-overlapping grid per therapist ----
     by_provider = defaultdict(list)
-    for pid, therapist, channel, st, et, dur in slot_rows:
+    for pid, therapist, channel, shrunk, st, et, dur in slot_rows:
         by_provider[pid].append({"therapist": therapist, "channel": channel,
-                                 "start": st, "end": et, "dur": int(dur),
+                                 "shrunk": int(shrunk), "start": st, "end": et,
+                                 "dur": int(dur),
                                  "c_off": 0, "ns_off": 0, "c_on": 0, "ns_on": 0})
     raw_n = len(slot_rows)
     kept_by_provider = {pid: tile(sl) for pid, sl in by_provider.items()}
-    kept_n = sum(len(v) for v in kept_by_provider.values())
+    kept = [s for sl in kept_by_provider.values() for s in sl]
+    kept_n = len(kept)
+    shrunk_n = sum(s["shrunk"] for s in kept)
     sys.stderr.write(f"[tile] {raw_n} candidate slots -> {kept_n} non-overlapping "
                      f"({raw_n - kept_n} overlapping dropped)\n")
+    sys.stderr.write(f"[shrink] {kept_n} offered = {kept_n - shrunk_n} available "
+                     f"+ {shrunk_n} shrunk\n")
 
     # ---- credit each appointment to exactly one surviving slot ----
-    unmatched = 0
+    # Only available slots can be credited: a shrunk slot is outside the
+    # denominator, so crediting one would let gross exceed 100%.
+    unmatched = in_shrunk = 0
     for appt_id, pid, appt_start, appt_channel, status in appt_rows:
         if status is None:
             continue
@@ -218,26 +257,35 @@ def main():
         if hit is None:
             unmatched += 1
             continue
+        if hit["shrunk"]:
+            in_shrunk += 1
+            continue
         done = status == "COMPLETED"
         if appt_channel == "Offline":
             hit["c_off" if done else "ns_off"] += 1
         else:
             hit["c_on" if done else "ns_on"] += 1
-    sys.stderr.write(f"[credit] {len(appt_rows)} appointments, {unmatched} outside any slot\n")
+    sys.stderr.write(f"[credit] {len(appt_rows)} appointments, {unmatched} outside any slot, "
+                     f"{in_shrunk} inside a shrunk slot\n")
 
     # ---- aggregate to dt x therapist x channel ----
-    agg = defaultdict(lambda: [0] * 10)
+    # `slots`/`mins` are AVAILABLE (the utilization denominator); `sh_slots`/
+    # `sh_min` are shrinkage. Offered is their sum, derived client-side.
+    agg = defaultdict(lambda: [0] * 12)
     for pid, slots in kept_by_provider.items():
         for s in slots:
             key = (s["start"][:10], s["therapist"], s["channel"])
             a = agg[key]
             d = s["dur"]
+            if s["shrunk"]:
+                a[10] += 1; a[11] += d
+                continue
             g_off = 1 if (s["c_off"] + s["ns_off"]) > 0 else 0
             n_off = 1 if s["c_off"] > 0 else 0
             g_on = 1 if (s["c_on"] + s["ns_on"]) > 0 else 0
             n_on = 1 if s["c_on"] > 0 else 0
-            a[0] += 1            # slots
-            a[1] += d            # mins
+            a[0] += 1            # available slots
+            a[1] += d            # available mins
             a[2] += g_off; a[3] += g_off * d
             a[4] += n_off; a[5] += n_off * d
             a[6] += g_on;  a[7] += g_on * d
@@ -247,7 +295,8 @@ def main():
                 for (dt, ther, ch), vals in sorted(agg.items())]
     cols = ["dt", "therapist", "program", "channel", "slots", "mins",
             "g_off_slots", "g_off_min", "n_off_slots", "n_off_min",
-            "g_on_slots", "g_on_min", "n_on_slots", "n_on_min"]
+            "g_on_slots", "g_on_min", "n_on_slots", "n_on_min",
+            "sh_slots", "sh_min"]
     payload = {
         "updated": datetime.now().strftime("%Y-%m-%d %H:%M IST"),
         "columns": cols,
